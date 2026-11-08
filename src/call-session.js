@@ -7,7 +7,8 @@ export class CallSession {
   emit() { this.onChange({...this.snapshot,turns:[...this.snapshot.turns]}); }
   start(scenario) {
     this.end(false); this.generation++; this.scenario=scenario; this.index=0;
-    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},sequence:0,sessionId:null};
+    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},sequence:0,sessionId:null,alert:null};
+    this.announcedRisk=0;
     this.lastRequest=0; this.retryAt=0;this.busy=false; this.advance(); this.schedule();
   }
   schedule() {
@@ -21,7 +22,24 @@ export class CallSession {
     this.snapshot.sequence++;
     const context=this.snapshot.turns.map((turn)=>turn.speaker + ': ' + turn.text).join('\n');
     this.snapshot.analysis={...mergeAnalysis(this.snapshot.analysis,analyzeText(context)),incomplete:this.snapshot.analysis.incomplete};
+    this.checkAlert();
     this.emit(); this.request();
+  }
+  checkAlert() {
+    if(!['playing','paused'].includes(this.snapshot.status))return;
+    const {risk,reasons}=this.snapshot.analysis;
+    const level={caution:1,high:2}[risk]||0;
+    const context=this.snapshot.turns.map(turn=>turn.speaker+': '+turn.text).join('\n');
+    const grounded=reasons.some(reason=>typeof reason.evidence==='string'&&reason.evidence.length>=3&&context.includes(reason.evidence));
+    if(level<=this.announcedRisk||!grounded)return;
+    this.announcedRisk=level;
+    this.snapshot.alert={id:this.generation+':'+level,risk};
+    // A single deliberate interruption for high risk; reviewing it never resets
+    // the warning or enables repeated interruptions from the same call.
+    if(risk==='high'){
+      this.snapshot.status='paused';
+      clearTimeout(this.timer);
+    }
   }
   async request() {
     if (this.busy || !['playing','paused','completed'].includes(this.snapshot.status)) return;
@@ -41,6 +59,7 @@ export class CallSession {
       if (sequence === this.snapshot.sequence) {
         this.snapshot.analysis=mergeAnalysis(this.snapshot.analysis,result);
         this.snapshot.analysis.incomplete=result.incomplete;
+        this.checkAlert();
         this.emit();
       }
     } catch (error) {

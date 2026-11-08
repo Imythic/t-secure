@@ -6,11 +6,12 @@ Verified locally on November 7, 2026.
 
 | Check | Result |
 | --- | --- |
-| Core detection, scoring, consent, authentication guards, service behavior, call scheduling, and OpenRouter adapter | 33 tests passed |
+| Core detection, scoring, consent, authentication guards, service behavior, call scheduling/alerts, audio lifecycle, and OpenRouter adapter | 42 tests passed |
 | Firestore security rules on demo-tsecure emulator | 8 tests passed |
-| Desktop, portrait mobile, and landscape Chrome interaction flows | 18 tests passed |
+| Desktop, portrait mobile, and landscape Chrome interaction flows | 26 tests passed |
 | Firebase Auth + Firestore integration | 4 tests passed |
 | Axe WCAG A/AA checks across 10 routes × 2 viewport sizes | 0 violations |
+| Call caution, high-risk dialog, and after-call states × 5 viewport sizes | 15 checks; 0 accessibility violations, browser errors, or horizontal overflow |
 | Production build and server-secret sentinel isolation | Passed; 7 browser artifacts inspected |
 | Production dependency audit | 0 known vulnerabilities |
 | Screenshot/layout capture | No browser exceptions or horizontal overflow |
@@ -18,6 +19,10 @@ Verified locally on November 7, 2026.
 Authentication integration on local Firebase emulators covers signup, email verification, login, private contact persistence, password reset, sign-out, account-bound advanced-analysis opt-in, Google popup cancellation, and API rejection of missing/invalid/unverified tokens. It also verifies that an AI provider failure cannot block opting out or subsequent standard message checks. Synthetic accounts only.
 
 The scoring checks cover minimum evidence, uncertain responses, incoming-threat volume, repeated evidence, and grounded user turns. Consent tests cover account binding, opt-out during extraction, and deletion while extraction is in flight. Call tests cover pause/resume, persistent warnings, late results, and leaving/returning through navigation.
+
+Call-alert checks additionally cover one alert per risk level per call, non-interrupting caution, a single high-risk pause, new-call reset, no scam alert for incomplete/benign analysis, grounded model escalation, keyboard review and Escape behavior, no repeated interruption after continuing, transcript focus retention, and visible actions at zoom-equivalent sizes. Audio checks cover visual-only defaults, optional tones and fixed spoken advice, cancellation on review/end, unavailable browser APIs, and cancellation while audio activation is pending. Browser speech tests use a controlled API stub; physical speakers and platform speech engines still need device testing.
+
+The native warning dialog keeps its heading and actions visible while details scroll. The transcript and long warning details accept keyboard focus. Essential warning copy remains 20px. A new script, scripts/audit-call-alerts.mjs, writes targeted screenshots and an accessibility/layout report under artifacts/qa/call-alerts/.
 
 Desktop captures use 1440 × 1000; mobile captures use 390 × 844 and 320 × 740. Additional captures cover 768 × 1024 tablets and 844 × 390 landscape phones. The layout pass also checks 720 CSS pixels as a 200%-zoom equivalent. The responsive Menu exposes every destination, closes after navigation, and uses keyboard-operable controls with at least 48px targets. These are Chrome viewport checks; physical-device testing remains separate.
 

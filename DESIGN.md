@@ -159,6 +159,8 @@ At 1020px, many task grids become a single primary column. At 900px, the rail be
 
 ## Elevation & Depth
 
+In-call caution uses a persistent amber notice with an icon, written risk label, and a pause action. A first high-risk escalation uses a focused native dialog and pauses the simulation. Its header and action area remain visible while long warning details scroll. Warning text stays at the 20px reading size, with at least 48px controls. The transcript is keyboard scrollable. Alerts are limited to one per risk level per call; additional evidence updates silently. Audio is optional and visual-only is the default.
+
 Thin boundaries and tonal surfaces establish most hierarchy. Soft offset shadows are used sparingly for the phone-preview interface, notifications, and primary-button hover. Main application panels remain flat.
 
 ### Shadow Vocabulary

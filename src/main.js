@@ -2,6 +2,7 @@ import '@fontsource-variable/manrope';
 import './styles.css';
 import { Client, firebaseConfigured, friendlyAuthError } from './client.js';
 import { CallSession } from './call-session.js';
+import { CallAudio } from './call-audio.js';
 import { analyzeText } from '../shared/detection.js';
 import { scenarios, messageSamples } from '../shared/fixtures.js';
 import { h, icon, riskLabels } from './ui.js';
@@ -11,9 +12,21 @@ const client=new Client();
 const ui={
   scenario:'family',call:{status:'idle',turns:[],analysis:{risk:'low',reasons:[]}},
   messageText:'',messageResult:null,messageBusy:false,profileBusy:false,profileOperation:0,
-  authMode:'login',recoveryTopic:'payment',recoverySteps:[],menuOpen:false,
+  authMode:'login',recoveryTopic:'payment',recoverySteps:[],menuOpen:false,callAudio:'visual',audioUnavailable:false,
 };
 const app=document.querySelector('#app');
+const warningDialog=document.querySelector('#call-warning-dialog');
+let lastCallAlertId=null;
+try{
+  const saved=localStorage.getItem('tsecure:call-alert-audio');
+  if(['visual','tone','speech'].includes(saved))ui.callAudio=saved;
+}catch{/* Visual alerts work without browser storage. */}
+const callAudio=new CallAudio({onUnavailable:()=>{
+  ui.audioUnavailable=true;
+  const status=document.querySelector('#call-audio-status');
+  if(status)status.textContent='Audio is unavailable. Visual alerts remain active.';
+}});
+callAudio.mode=ui.callAudio;
 const route=()=>{const parts=location.hash.replace(/^#\/?/,'').split('/');return {name:parts[0]||'home',id:parts[1]||null};};
 function notify(message,error=false) {
   clearTimeout(notify.timer);
@@ -23,6 +36,10 @@ function notify(message,error=false) {
 }
 function render() {
   const state=client.state,current=route();
+  const focused=document.activeElement;
+  const callFocus=current.name==='calls'&&focused?.closest('#call-workspace')?focused.dataset.action:null;
+  const audioFocused=focused?.id==='call-alert-audio';
+  const transcriptReview=focused?.classList.contains('transcript')?{scrollTop:focused.scrollTop}:null;
   if(state.loading){app.innerHTML='<p class="boot" role="status">Getting your safety space ready…</p>';return;}
   if(!state.user || (!state.demo&&!state.user.emailVerified) || current.name==='account'){
     app.innerHTML=views.authView(state,ui,firebaseConfigured);return;
@@ -35,6 +52,22 @@ function render() {
   };
   app.innerHTML=views.shell(state,current.name,(pages[current.name]||pages.home)(),ui.menuOpen);
   document.title=(current.name==='home'?'T-Secure':({'t-life':'T-Life preview',calls:'Call protection',messages:'Check a message',profile:'My profile',settings:'Settings',history:'Recent activity',learn:'Safety guide',recovery:'Recovery guidance',about:'About this demo'}[current.name]||'T-Secure'))+' · A safer next step';
+  if(!warningDialog.open){
+    if(callFocus)restoreCallFocus(callFocus);
+    if(audioFocused)document.querySelector('#call-alert-audio')?.focus({preventScroll:true});
+    if(transcriptReview)restoreTranscriptFocus(transcriptReview.scrollTop);
+  }
+}
+function restoreTranscriptFocus(scrollTop) {
+  const transcript=document.querySelector('.transcript');
+  if(transcript){transcript.focus({preventScroll:true});transcript.scrollTop=scrollTop;}
+}
+function restoreCallFocus(action) {
+  const workspace=document.querySelector('#call-workspace');
+  const controls=[...workspace?.querySelectorAll('[data-action]')||[]];
+  const same=controls.find(control=>control.dataset.action===action);
+  const counterpart=controls.find(control=>control.dataset.action===(action==='pause'?'resume':action==='resume'?'pause':''));
+  (same||counterpart)?.focus({preventScroll:true});
 }
 const session=new CallSession({
   analyze:(input,signal)=>client.analyze(input,signal),
@@ -43,16 +76,40 @@ const session=new CallSession({
     ui.call=snapshot;
     const workspace=document.querySelector('#call-workspace');
     if(workspace){
-      const action=document.activeElement?.dataset.action;
+      const action=workspace.contains(document.activeElement)?document.activeElement?.dataset.action:null;
+      const reviewing=document.activeElement?.classList.contains('transcript');
+      const previousScroll=reviewing?document.activeElement.scrollTop:0;
       workspace.innerHTML=views.callWorkspace(client.state,ui);
       const selector=document.querySelector('#scenario');if(selector)selector.disabled=['playing','paused'].includes(snapshot.status);
       const transcript=workspace.querySelector('.transcript');
-      if(transcript)transcript.scrollTop=transcript.scrollHeight;
-      if(oldRisk!==snapshot.analysis.risk)document.querySelector('#call-announcement').textContent=riskLabels[snapshot.analysis.risk];
-      if(action==='pause')workspace.querySelector('[data-action="resume"]')?.focus({preventScroll:true});
-      if(action==='resume')workspace.querySelector('[data-action="pause"]')?.focus({preventScroll:true});
+      if(transcript)transcript.scrollTop=reviewing?previousScroll:transcript.scrollHeight;
+      if(oldRisk!==snapshot.analysis.risk&&snapshot.analysis.risk==='unknown')document.querySelector('#call-announcement').textContent=riskLabels.unknown+'. Keep verifying independently.';
+      if(action)restoreCallFocus(action);
+      if(reviewing)restoreTranscriptFocus(previousScroll);
+    }
+    const active=['playing','paused'].includes(snapshot.status);
+    if(!active){warningDialog.close();callAudio.stop();}
+    if(active&&route().name==='calls'&&snapshot.alert&&snapshot.alert.id!==lastCallAlertId){
+      lastCallAlertId=snapshot.alert.id;
+      const announcement=document.querySelector('#call-announcement');
+      if(announcement)announcement.textContent=snapshot.alert.risk==='high'?'High-risk warning. The practice call is paused. Verify the caller independently.':'Caution. Pressure or urgency deserves a second look.';
+      if(snapshot.alert.risk==='high')openCallWarning();
+      callAudio.play(snapshot.alert.risk);
     }
   },
+});
+function openCallWarning() {
+  warningDialog.innerHTML=views.callWarningDialog(ui.call,client.state);
+  if(!warningDialog.open)warningDialog.showModal();
+}
+function closeCallWarning(resume=false) {
+  warningDialog.close();callAudio.stop();
+  if(resume)session.resume();
+  document.querySelector(ui.call.status==='paused'?'[data-action="resume"]':ui.call.status==='playing'?'[data-action="pause"]':'[data-action="start-call"]')?.focus();
+}
+warningDialog.addEventListener('cancel',event=>{event.preventDefault();closeCallWarning();});
+warningDialog.addEventListener('click',event=>{
+  if(event.target.closest('a[href^="tel:"]'))closeCallWarning();
 });
 client.subscribe((state)=>{
   if(state.user?.emailVerified&&!state.demo&&route().name==='account')location.hash='/home';
@@ -93,10 +150,14 @@ document.addEventListener('click',async(event)=>{
       case 'toggle-menu':ui.menuOpen=!ui.menuOpen;render();document.querySelector('[data-action="toggle-menu"]')?.focus({preventScroll:true});break;
       case 'enter-demo':client.enterDemo();location.hash='/home';break;
       case 'auth-mode':ui.authMode=button.dataset.mode;render();break;
-      case 'start-call':session.start(scenarios.find((s)=>s.id===ui.scenario));break;
+      case 'start-call':await callAudio.prepare();session.start(scenarios.find((s)=>s.id===ui.scenario));if(!warningDialog.open)restoreCallFocus('pause');break;
       case 'pause':session.pause();break;
       case 'resume':session.resume();break;
-      case 'end-call':session.end();break;
+      case 'end-call':session.end();closeCallWarning();break;
+      case 'keep-call-paused':closeCallWarning();break;
+      case 'continue-call':closeCallWarning(true);break;
+      case 'review-call-warning':session.pause();openCallWarning();break;
+      case 'pause-to-verify':session.pause();document.querySelector('.call-guidance')?.focus();break;
       case 'message-sample':ui.messageText=messageSamples[Number(button.dataset.index)].text;ui.messageResult=null;render();document.querySelector('#message-text')?.focus();break;
       case 'analyze-profile':await analyzeProfile();break;
       case 'delete-assessment':++ui.profileOperation;ui.profileBusy=false;await client.deleteAssessment();notify('Assessment deleted from both profile views.');break;
@@ -121,6 +182,12 @@ document.addEventListener('change',async(event)=>{
     if(element.id==='scenario'){
       ui.scenario=element.value;session.end(false);
       ui.call={status:'idle',turns:[],analysis:{risk:'low',reasons:[]}};render();
+    }
+    if(element.id==='call-alert-audio'){
+      ui.callAudio=element.value;ui.audioUnavailable=false;
+      const status=document.querySelector('#call-audio-status');if(status)status.textContent='';
+      try{localStorage.setItem('tsecure:call-alert-audio',ui.callAudio);}catch{/* Optional preference. */}
+      await callAudio.setMode(ui.callAudio);
     }
     if(element.id==='advanced')await changeConsent(element.checked,client.state.consent.historySetId);
     if(element.id==='history-set')await changeConsent(true,element.value);

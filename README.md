@@ -43,6 +43,14 @@ Local live-service checks confirmed authenticated profile loading, consent, Nemo
 
 The sample histories demonstrate 83/100 observed risky responses, 0/100, and insufficient evidence. Zero is not a safety guarantee. This index is a prototype, not a validated probability of future fraud.
 
+## In-call alerts
+
+Call practice includes prevention guidance, real-time risk labels with highlighted transcript evidence, and recovery links after the call. A grounded caution warning shows a banner without interrupting. The first grounded high-risk warning pauses the simulation and opens a keyboard-accessible dialog with the evidence, independent-verification guidance, a trusted-contact action, and controls to end or continue the demo. Escape keeps the call paused. Reviewing the alert never clears the warning.
+
+Each call announces at most one caution and one high-risk escalation. Repeated tactics can update the evidence without replaying audio or reopening the dialog. Incomplete analysis is identified separately and does not itself trigger a scam alert. Starting a new call resets this alert budget.
+
+“Call alert audio” defaults to visual-only alerts. Users can opt into a gentle device tone or fixed spoken guidance; that preference stays in this browser. No caller content or model-generated instructions are spoken. Audio stops when the warning is reviewed or the call ends. Visual alerts remain available when the browser cannot play audio. This does not inject sound into a real phone call or implement private/binaural carrier audio.
+
 ## Architecture
 
 - src/: frontend, Firebase client, call scheduler, views, and styles.
@@ -99,6 +107,10 @@ With the normal preview server running:
 
     npm run test:a11y
     npm run capture
+
+For call alerts across desktop, mobile, landscape, and zoom-equivalent viewports:
+
+    node scripts/audit-call-alerts.mjs
 
 Reports/screenshots go under ignored artifacts/qa/. Captures check overflow, browser exceptions, and a 720px CSS viewport equivalent to 200% zoom on a 1440px display. Automated accessibility checks complement manual review.
 
