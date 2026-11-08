@@ -28,6 +28,14 @@ test('landing explains the product and the demo leads through onboarding to the 
   await page.getByRole('button',{name:/Continue/}).click();
   await expect(page.getByRole('heading',{name:/Trusted contacts/})).toBeVisible();
   await page.getByRole('button',{name:/Skip for now/}).click();
+  await expect(page.getByRole('heading',{name:/Your risk profile/})).toBeVisible();
+  await page.getByLabel('Widowed').check();
+  await page.getByLabel(/I have grandchildren/).check();
+  await page.getByLabel(/Gambling or betting/).check();
+  await page.getByRole('button',{name:/Continue/}).click();
+  await expect(page.getByRole('heading',{name:/One-minute voice check-in/})).toBeVisible();
+  await expect(page.getByText('What is your first memory of your grandchild?')).toBeVisible();
+  await page.getByRole('button',{name:/Skip for now/}).click();
   await page.getByRole('button',{name:/Finish setup/}).click();
   await expect(page.getByText(/Please confirm you understand/)).toBeVisible();
   await page.getByLabel(/I understand how T-Secure uses my information/).check();
@@ -36,6 +44,7 @@ test('landing explains the product and the demo leads through onboarding to the 
   await page.getByRole('link',{name:/Go to my dashboard/}).click();
   await expect(page.getByRole('heading',{name:'Welcome back, Pat.'})).toBeVisible();
   await expect(page.getByText(/Interrupting only for high risk/)).toBeVisible();
+  await expect(page.locator('.status-card').getByText('Heightened protection')).toBeVisible();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-text-size','large');
 });
@@ -62,6 +71,30 @@ test('a genuine urgent text stays low risk',async({page})=>{
   await page.getByRole('button',{name:'Urgent but genuine'}).click();
   await page.getByRole('button',{name:'Analyze message',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Low risk'})).toBeVisible();
+});
+test('the risk profile raises a business pitch for a business owner and explains why',async({page})=>{
+  const text='Our vendor has updated banking details, please use them for the next invoice.';
+  await demo(page);
+  await page.goto('/#/messages');
+  await page.getByLabel('Message or website address').fill(text);
+  await page.getByRole('button',{name:'Analyze message',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Low risk'})).toBeVisible();
+  await page.goto('/#/settings');
+  await page.getByLabel('Occupation').selectOption('business-owner');
+  await page.getByLabel(/Anxiety, depression/).check();
+  await page.getByRole('button',{name:'Save risk profile'}).click();
+  await expect(page.locator('#risk-profile .protection-level')).toHaveText('Maximum protection');
+  await page.goto('/#/messages');
+  await page.getByLabel('Message or website address').fill(text);
+  await page.getByRole('button',{name:'Analyze message',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Elevated risk'})).toBeVisible();
+  await expect(page.locator('.personal-note').getByText(/Business pitches, invoices/)).toBeVisible();
+  await page.goto('/#/profile');
+  await expect(page.getByText(/You told us you work as/)).toBeVisible();
+  await page.goto('/#/settings');
+  page.once('dialog',(dialog)=>dialog.accept());
+  await page.getByRole('button',{name:'Delete risk profile'}).click();
+  await expect(page.locator('#risk-profile .protection-level')).toHaveText('Standard protection');
 });
 test('trusted contacts persist and are only dialed through an explicit action',async({page})=>{
   await demo(page);

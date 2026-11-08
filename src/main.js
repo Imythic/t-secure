@@ -1,18 +1,21 @@
 import '@fontsource-variable/manrope';
 import './styles.css';
 import './components.css';
-import { Client, firebaseConfigured, friendlyAuthError, preferencesOf, needsOnboarding } from './client.js';
+import { Client, firebaseConfigured, friendlyAuthError, preferencesOf, needsOnboarding, riskProfileOf, protectionFor } from './client.js';
+import { VoiceRecorder } from './voice-recorder.js';
 import { CallSession } from './call-session.js';
 import { CallAudio } from './call-audio.js';
 import { CallVoice } from './call-voice.js';
 import { analyzeText } from '../shared/detection.js';
-import { analyzeConversation } from '../shared/prediction.js';
+import { analyzePersonal, interruptsForCaution } from '../shared/risk-profile.js';
+import { compareToBaseline, validCheckin } from '../shared/voice-baseline.js';
 import { scenarios, messageSamples } from '../shared/fixtures.js';
 import { EVALUATION_SCENARIOS, runRules, scoreResult, summarize } from '../shared/evaluation.js';
 import { h, icon, riskLabels } from './ui.js';
 import * as views from './views.js';
 import { landing } from './pages/landing.js';
-import { onboarding, readPreferences } from './pages/onboarding.js';
+import { onboarding, readPreferences, STEP } from './pages/onboarding.js';
+import { readRiskProfile, voiceCheckin } from './pages/risk-profile.js';
 import { developer } from './pages/developer.js';
 
 const client=new Client();
@@ -20,8 +23,9 @@ const ui={
   scenario:'family',call:{status:'idle',turns:[],analysis:{risk:'low',reasons:[]}},callElapsed:0,callVoice:false,warningPanel:null,warningId:null,
   messageText:'',messageSender:'',messageChecked:null,messageResult:null,messageBusy:false,
   authMode:'login',recoveryTopic:null,recoverySteps:[],menuOpen:false,audioUnavailable:false,
-  onboarding:null,dev:{status:null,runs:{},busy:null,error:null,loading:false},
+  onboarding:null,dev:{status:null,runs:{},busy:null,error:null,loading:false},voice:{status:'idle'},
 };
+let voiceRecorder=null;
 const AUTH_ROUTES=['login','signup','reset'];
 const TITLES={home:'Dashboard',calls:'Live call protection',messages:'SMS and link scanner',profile:'Protection profile',settings:'Settings',history:'Protection history',learn:'Safety guide',recovery:'Recovery Assistant','t-life':'T-Life preview',about:'About this prototype',developer:'Model evaluation',onboarding:'Set up your protection',login:'Sign in',signup:'Create account',reset:'Reset password'};
 const app=document.querySelector('#app');
@@ -51,7 +55,7 @@ function applyPreferences(preferences) {
   callAudio.mode=preferences.callAlertAudio;
 }
 function startOnboarding(state) {
-  ui.onboarding={step:0,draft:{displayName:state.profile?.displayName||(state.user?.demo?'':state.user?.displayName)||'',preferences:preferencesOf(state)}};
+  ui.onboarding={step:0,draft:{displayName:state.profile?.displayName||(state.user?.demo?'':state.user?.displayName)||'',preferences:preferencesOf(state),riskProfile:riskProfileOf(state)}};
 }
 function render() {
   const state=client.state,current=route();
@@ -72,7 +76,7 @@ function render() {
   ui.onboarding=null;
   const pages={
     home:()=>views.home(state),calls:()=>views.calls(state,ui),messages:()=>views.messages(state,ui),
-    profile:()=>views.profile(state),settings:()=>views.settings(state),history:()=>views.history(state),
+    profile:()=>views.profile(state),settings:()=>views.settings(state,ui),history:()=>views.history(state),
     learn:()=>views.learn(state),recovery:()=>views.recovery(state,ui,current.id),
     't-life':()=>views.profile(state,true),about:()=>views.about(),developer:()=>developer(state,ui),
   };
@@ -104,6 +108,7 @@ function recordAction(action) {client.updateWarning(ui.warningId,action).catch((
 let spokenTurns=0;
 const session=new CallSession({
   analyze:(input,signal)=>client.analyze(input,signal),
+  protection:()=>protectionFor(client.state),
   onChange:(snapshot)=>{
     const oldRisk=ui.call.analysis?.risk;
     ui.call=snapshot;ui.callElapsed=session.elapsedMs();
@@ -127,7 +132,7 @@ const session=new CallSession({
     if(!active){warningDialog.close();callAudio.stop();}
     if(active&&route().name==='calls'&&snapshot.alert&&snapshot.alert.id!==lastCallAlertId){
       lastCallAlertId=snapshot.alert.id;
-      const quiet=snapshot.alert.risk==='caution'&&preferencesOf(client.state).warningStyle==='high-only';
+      const quiet=snapshot.alert.risk==='caution'&&!interruptsForCaution(protectionFor(client.state),preferencesOf(client.state).warningStyle);
       if(quiet)return;
       const announcement=document.querySelector('#call-announcement');
       if(announcement)announcement.textContent=snapshot.alert.risk==='high'?'High risk. The simulated call is paused. Verify the caller independently.':'Elevated risk. Pressure or urgency deserves a second look.';
@@ -162,6 +167,7 @@ client.subscribe((state)=>{
 });
 window.addEventListener('hashchange',()=>{
   ui.menuOpen=false;
+  if(ui.voice.status!=='idle')resetVoice();
   if(route().name!=='calls'&&['playing','paused'].includes(ui.call.status))session.end();
   if(route().name!=='recovery')ui.recoveryTopic=null;
   render();window.scrollTo({top:0,behavior:'instant'});
@@ -182,6 +188,45 @@ function localBenchmark() {
   });
   return {provider:{id:'rules',label:'Rule-based baseline',model:'deterministic rules'},ranAt:new Date().toISOString(),runs,summary:summarize(runs)};
 }
+// Voice check-in: the recording stays in memory on this device and is discarded on reset or navigation.
+const voiceProfile=()=>ui.onboarding&&route().name==='onboarding'?ui.onboarding.draft.riskProfile:riskProfileOf(client.state);
+function updateVoice() {
+  const target=document.querySelector('#voice-checkin');
+  if(target)target.outerHTML=voiceCheckin(voiceProfile(),ui.voice,{onboarding:route().name==='onboarding'});
+}
+function resetVoice() {
+  voiceRecorder?.cancel();voiceRecorder=null;
+  if(ui.voice.result?.audio)URL.revokeObjectURL(ui.voice.result.audio);
+  ui.voice={status:VoiceRecorder.supported()?'idle':'unsupported'};
+}
+async function startVoice() {
+  resetVoice();
+  if(ui.voice.status==='unsupported'){updateVoice();return;}
+  voiceRecorder=new VoiceRecorder({onTick:({remaining,promptIndex})=>{
+    const changed=promptIndex!==ui.voice.promptIndex;
+    Object.assign(ui.voice,{remaining,promptIndex});
+    if(changed)updateVoice();
+    else{const live=document.querySelector('.voice-live strong');if(live)live.textContent=remaining+'s';}
+  }});
+  ui.voice={status:'recording',remaining:60,promptIndex:0};
+  let result;
+  try{const pending=voiceRecorder.start();updateVoice();document.querySelector('[data-action="voice-stop"]')?.focus();result=await pending;}
+  catch(error){voiceRecorder=null;ui.voice={status:'error',error:error.name==='NotAllowedError'?'Microphone access was not allowed. You can allow it in your browser settings, or skip this step.':'The microphone could not be started.'};updateVoice();return;}
+  voiceRecorder=null;
+  if(!result)return;
+  const onboardingStep=route().name==='onboarding';
+  const baseline=voiceProfile()?.voiceBaseline;
+  const valid=validCheckin(result.summary);
+  ui.voice={status:'done',result:{...result,valid},comparison:baseline&&!onboardingStep&&valid?compareToBaseline(baseline,result.summary):null};
+  updateVoice();
+}
+async function saveVoiceBaseline() {
+  const {summary,prompts}=ui.voice.result;
+  const voiceBaseline={...summary,prompts,recordedAt:new Date().toISOString()};
+  if(ui.onboarding&&route().name==='onboarding'){ui.onboarding.draft.riskProfile={...ui.onboarding.draft.riskProfile,voiceBaseline};resetVoice();render();notify('Voice baseline ready. It will be saved when you finish setup.');return;}
+  await client.saveRiskProfile({...riskProfileOf(client.state),voiceBaseline});resetVoice();updateVoice();notify('Voice baseline saved. The recording itself was discarded.');
+}
+const hasRiskAnswers=(rp)=>Boolean(rp&&(rp.relationshipStatus||rp.hasGrandchildren||rp.riskHistory?.length||rp.wellbeing?.length||rp.occupation||rp.voiceBaseline));
 function startCall() {
   spokenTurns=0;ui.warningPanel=null;ui.warningId=null;
   session.start(scenarios.find((s)=>s.id===ui.scenario));
@@ -236,8 +281,29 @@ document.addEventListener('click',async(event)=>{
       case 'resend-verification':button.disabled=true;await client.resend();notify('Verification email sent. Please check your inbox.');break;
       case 'check-verification':button.disabled=true;await client.refreshVerification();break;
       case 'retry-account':window.location.reload();break;
+      case 'voice-start':await startVoice();break;
+      case 'voice-stop':await voiceRecorder?.stop();break;
+      case 'voice-cancel':case 'voice-reset':resetVoice();updateVoice();break;
+      case 'voice-save':await saveVoiceBaseline();break;
+      case 'voice-boost':{
+        const boostUntil=new Date(Date.now()+7*24*60*60*1000).toISOString();
+        await client.saveRiskProfile({...riskProfileOf(client.state),boostUntil});resetVoice();render();notify('Extra protection is on for the next 7 days.');break;
+      }
+      case 'voice-delete':{
+        if(!window.confirm('Delete your voice baseline?'))break;
+        const {voiceBaseline:_removed,...rest}=riskProfileOf(client.state);
+        await client.saveRiskProfile(rest);notify('Voice baseline deleted.');break;
+      }
+      case 'delete-risk-profile':
+        if(!window.confirm('Delete all of your risk profile answers and voice baseline?'))break;
+        await client.deleteRiskProfile();notify('Your risk profile was deleted. Standard protection is on.');break;
       case 'onboarding-back':ui.onboarding.step=Math.max(0,ui.onboarding.step-1);render();break;
-      case 'skip-onboarding':await client.saveProfile({displayName:ui.onboarding?.draft.displayName||client.state.user?.displayName||'',onboardingCompleted:true,preferences:ui.onboarding?.draft.preferences||{}});ui.onboarding=null;location.hash='/home';break;
+      case 'skip-onboarding':{
+        const draft=ui.onboarding?.draft;resetVoice();
+        await client.saveProfile({displayName:draft?.displayName||client.state.user?.displayName||'',onboardingCompleted:true,preferences:draft?.preferences||{}});
+        if(hasRiskAnswers(draft?.riskProfile))await client.saveRiskProfile(draft.riskProfile);
+        ui.onboarding=null;location.hash='/home';break;
+      }
       case 'run-benchmark':{
         const provider=button.dataset.provider;
         ui.dev.busy=provider;ui.dev.error=null;render();
@@ -302,7 +368,7 @@ function validateAuth(data) {
 }
 document.addEventListener('submit',async(event)=>{
   const form=event.target;
-  if(!['message-form','auth-form','contact-form','onboarding-form','preferences-form','preferences-form-access'].includes(form.id))return;
+  if(!['message-form','auth-form','contact-form','onboarding-form','preferences-form','preferences-form-access','risk-profile-form'].includes(form.id))return;
   event.preventDefault();
   const data=Object.fromEntries(new FormData(form));
   const submit=form.querySelector('[type="submit"]');if(submit)submit.disabled=true;
@@ -317,7 +383,7 @@ document.addEventListener('submit',async(event)=>{
         const result=await client.analyze({channel:/^https?:\/\/\S+$/.test(text.trim())?'link':'message',text,sender:ui.messageSender,sequence:1});
         if(ui.messageText===text){
           ui.messageResult=result;
-          const insight=analyzeConversation([{speaker:'contact',text}]);
+          const insight=analyzePersonal([{speaker:'contact',text}],protectionFor(client.state));
           const level=views.effectiveRisk({insight,analysis:result});
           if(['caution','high'].includes(level))logWarning(level,insight.prediction,'message',result.sessionId).then((id)=>{ui.messageWarningId=id;});
         }
@@ -335,11 +401,14 @@ document.addEventListener('submit',async(event)=>{
     if(form.id==='onboarding-form'){
       const draft=ui.onboarding.draft;
       const step=Number(form.dataset.step);
-      if([1,2].includes(step))draft.preferences=readPreferences(form,draft.preferences);
-      if(step===2&&data.displayName!=null)draft.displayName=data.displayName.trim();
-      if(step===4){
+      if([STEP.protection,STEP.accessibility].includes(step))draft.preferences=readPreferences(form,draft.preferences);
+      if(step===STEP.accessibility&&data.displayName!=null)draft.displayName=data.displayName.trim();
+      if(step===STEP.risk)draft.riskProfile=readRiskProfile(form,draft.riskProfile);
+      if(step===STEP.voice)resetVoice();
+      if(step===STEP.privacy){
         if(!form.elements.consent.checked){notify('Please confirm you understand how your information is used.',true);return;}
         await client.saveProfile({displayName:draft.displayName,preferences:draft.preferences,onboardingCompleted:true,privacyAcknowledged:true});
+        if(hasRiskAnswers(draft.riskProfile))await client.saveRiskProfile(draft.riskProfile);
       }
       ui.onboarding.step=step+1;render();
       document.querySelector('.onboarding-card h1')?.setAttribute('tabindex','-1');document.querySelector('.onboarding-card h1')?.focus();
@@ -348,6 +417,10 @@ document.addEventListener('submit',async(event)=>{
       const preferences=readPreferences(form,preferencesOf(client.state));
       await client.saveProfile({preferences,...(data.displayName!=null?{displayName:data.displayName}:{})});
       notify('Preferences saved.');
+    }
+    if(form.id==='risk-profile-form'){
+      await client.saveRiskProfile(readRiskProfile(form,riskProfileOf(client.state)));
+      notify('Risk profile saved. Your protection has been updated.');
     }
     if(form.id==='auth-form'){
       const problem=validateAuth(data);

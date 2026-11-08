@@ -3,7 +3,8 @@ import { httpError } from './auth.js';
 import { parseCommunication } from '../shared/schema.js';
 import { analyzeText, mergeAnalysis } from '../shared/detection.js';
 import { extractIndicators, indicatorsToStore } from '../shared/network.js';
-import { analyzeConversation, combineRisk, maxLevel, turnsFromText, contactText } from '../shared/prediction.js';
+import { combineRisk, maxLevel, turnsFromText, contactText } from '../shared/prediction.js';
+import { analyzePersonal } from '../shared/risk-profile.js';
 import { buildReport, validateModelReport, ACTION_CODES } from '../shared/report.js';
 import { EVALUATION_SCENARIOS, runRules, scoreResult, summarize } from '../shared/evaluation.js';
 import { modelName as configuredModel } from './model-config.js';
@@ -26,7 +27,7 @@ export function createService({store, provider, model, modelName = configuredMod
         if (input.sequence <= previous.sequence) throw httpError(409, 'A newer analysis is already available.');
       }
       const sessionId = input.sessionId || randomUUID();
-      const insight = analyzeConversation(turnsFromText(input.text));
+      const insight = analyzePersonal(turnsFromText(input.text), input.protection);
       let result = analyzeText(contactText(input.text));
       const deterministic = maxLevel(result.risk, insight.level);
       result.risk = deterministic;
@@ -52,6 +53,7 @@ export function createService({store, provider, model, modelName = configuredMod
         reasonCodes:[...new Set(result.reasons.map((r) => r.code))],
         tactics:[...new Set(insight.findings.map((f) => f.tactic).concat((modelReport?.tactics || []).map((t) => t.tactic)))],
         predictedAction:report.predicted_next_action?.action || null, analysisSource:report.analysis_source,
+        ...(insight.personal.findings.length ? {focusAreas:[...new Set(insight.personal.findings.map((f) => f.focus))]} : {}),
         createdAt:previous?.createdAt || new Date().toISOString(), updatedAt:new Date().toISOString(),
         recovery:previous?.recovery || [],
       }); } catch { saved = false; }

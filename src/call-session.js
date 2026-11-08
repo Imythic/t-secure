@@ -1,8 +1,9 @@
 import { analyzeText, mergeAnalysis } from '../shared/detection.js';
-import { analyzeConversation, contactText } from '../shared/prediction.js';
+import { contactText } from '../shared/prediction.js';
+import { analyzePersonal } from '../shared/risk-profile.js';
 export class CallSession {
-  constructor({analyze,onChange,intervalMs=4500,minAnalysisMs=3000}) {
-    Object.assign(this,{analyze,onChange,intervalMs,minAnalysisMs});
+  constructor({analyze,onChange,protection=()=>null,intervalMs=4500,minAnalysisMs=3000}) {
+    Object.assign(this,{analyze,onChange,protection,intervalMs,minAnalysisMs});
     this.generation=0; this.snapshot={status:'idle',turns:[],analysis:{risk:'low',reasons:[]}};
   }
   emit() { this.onChange({...this.snapshot,turns:[...this.snapshot.turns]}); }
@@ -11,7 +12,7 @@ export class CallSession {
   stopClock() { if(this.clock?.since){this.clock.total+=Date.now()-this.clock.since;this.clock.since=null;} }
   start(scenario) {
     this.end(false); this.generation++; this.scenario=scenario; this.index=0; this.clock={total:0,since:Date.now()};
-    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},insight:analyzeConversation([]),predictedAt:null,sequence:0,sessionId:null,alert:null};
+    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},insight:analyzePersonal([],this.protection()),predictedAt:null,sequence:0,sessionId:null,alert:null};
     this.announcedRisk=0;
     this.lastRequest=0; this.retryAt=0;this.busy=false; this.advance(); this.schedule();
   }
@@ -31,7 +32,7 @@ export class CallSession {
     this.emit(); this.request();
   }
   updateInsight() {
-    const insight=analyzeConversation(this.snapshot.turns);
+    const insight=analyzePersonal(this.snapshot.turns,this.protection());
     // Remember when a likely next step was first predicted, so the timeline can
     // show how early the warning came compared with the actual request.
     if(insight.prediction&&insight.prediction.strength!=='possible'&&!this.snapshot.predictedAt)this.snapshot.predictedAt={turn:this.snapshot.turns.length,action:insight.prediction.predictedAction};
@@ -45,7 +46,7 @@ export class CallSession {
     const grounded=reasons.some(reason=>typeof reason.evidence==='string'&&reason.evidence.length>=3&&context.includes(reason.evidence));
     const ruleLevel=grounded?({caution:1,high:2}[risk]||0):0;
     // Prediction findings are exact transcript excerpts, so they are grounded by construction.
-    const insightLevel=insight&&(insight.findings.length||insight.requests.length)?({caution:1,high:2}[insight.level]||0):0;
+    const insightLevel=insight&&(insight.findings.length||insight.requests.length||insight.personal?.findings.length)?({caution:1,high:2}[insight.level]||0):0;
     const level=Math.max(ruleLevel,insightLevel);
     if(level<=this.announcedRisk)return;
     this.announcedRisk=level;

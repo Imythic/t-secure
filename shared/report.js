@@ -77,6 +77,11 @@ export function buildReport({communicationType = 'message', level, insight, mode
     recommended_action: recommendedFor(final, prediction),
     explanation: explain(final, tactics, prediction),
     model_explanation: model?.explanation || null,
+    personal_protection: insight.personal ? {
+      level: insight.personal.level,
+      focus_matches: insight.personal.findings.map((f) => ({focus: f.focus, label: f.label, evidence: f.excerpt, stage: f.turn})),
+      adjustments: insight.personal.boosts.map((b) => b.reason),
+    } : null,
     analysis_source: source,
     incomplete,
     uncertainty: 'Warnings are estimates based on the words used. They do not prove who is calling or guarantee what happens next.',

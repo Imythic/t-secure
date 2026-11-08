@@ -1,7 +1,8 @@
 import { analyzeText } from '../shared/detection.js';
 import { extractIndicators, indicatorsToStore } from '../shared/network.js';
 import { parseCommunication } from '../shared/schema.js';
-import { analyzeConversation, maxLevel, turnsFromText, contactText } from '../shared/prediction.js';
+import { maxLevel, turnsFromText, contactText } from '../shared/prediction.js';
+import { analyzePersonal, cleanRiskProfile, protectionOf } from '../shared/risk-profile.js';
 import { buildReport } from '../shared/report.js';
 
 const firebaseConfig={
@@ -32,6 +33,16 @@ export function friendlyAuthError(error) {
   })[error.code] || error.message || 'Something went wrong. Please try again.';
 }
 export const preferencesOf=(state)=>({...DEFAULT_PREFERENCES,...(state.profile?.preferences||{})});
+export const riskProfileOf=(state)=>cleanRiskProfile(state.profile?.riskProfile);
+export const protectionFor=(state)=>protectionOf(state.profile?.riskProfile);
+// Firestore returns Timestamps; the app works with ISO strings everywhere.
+const iso=(value)=>value?.toDate?.().toISOString()||value||null;
+function normalizeProfile(data) {
+  if(!data?.riskProfile)return data||null;
+  const rp={...data.riskProfile,boostUntil:iso(data.riskProfile.boostUntil)};
+  if(rp.voiceBaseline)rp.voiceBaseline={...rp.voiceBaseline,recordedAt:iso(rp.voiceBaseline.recordedAt)};
+  return {...data,riskProfile:rp};
+}
 export const needsOnboarding=(state)=>Boolean(state.user)&&!state.profile?.onboardingCompleted;
 export class Client {
   constructor() {this.state=empty();this.listeners=new Set();this.generation=0;this.unsubscribers=[];this.retryAt=new Map();}
@@ -82,7 +93,7 @@ export class Client {
           },(error)=>{this.state.syncError=message;this.emit();reject(error);}));
         });
         await Promise.all([
-          watch(doc(this.db,'users',uid),(s)=>{this.state.profile=s.data()||null;},'Your protection profile could not be loaded. Check your connection and retry.'),
+          watch(doc(this.db,'users',uid),(s)=>{this.state.profile=normalizeProfile(s.data());},'Your protection profile could not be loaded. Check your connection and retry.'),
           watch(query(collection(this.db,'users',uid,'trustedContacts'),orderBy('createdAt','asc'),limit(MAX_CONTACTS)),(s)=>{this.state.contacts=s.docs.map((d)=>({id:d.id,...d.data()}));},'Your trusted contacts could not be loaded.'),
           watch(query(collection(this.db,'users',uid,'incidents'),orderBy('updatedAt','desc'),limit(50)),(s)=>{this.state.incidents=s.docs.map((d)=>({id:d.id,...d.data()}));},'Your protection history could not be loaded.'),
           watch(query(collection(this.db,'users',uid,'warnings'),orderBy('displayedAt','desc'),limit(50)),(s)=>{this.state.warnings=s.docs.map((d)=>({id:d.id,...d.data(),displayedAt:d.data().displayedAt?.toDate?.().toISOString()||null}));},'Your warning history could not be loaded.'),
@@ -148,6 +159,25 @@ export class Client {
     delete next.privacyAcknowledged;
     this.state.profile={protectionEnabled:true,...next};this.persist();this.emit();
   }
+  // Risk profile: optional self-reported answers that can only add protection. Owner-only in Firestore.
+  async saveRiskProfile(value) {
+    const clean=cleanRiskProfile(value);
+    const stored=Object.fromEntries(Object.entries(clean).filter(([,v])=>v!==null&&v!==false&&!(Array.isArray(v)&&!v.length)));
+    if(!this.state.demo){
+      const {doc,updateDoc,serverTimestamp,Timestamp}=this.sdk;
+      const write={...stored,updatedAt:serverTimestamp()};
+      if(write.boostUntil)write.boostUntil=Timestamp.fromDate(new Date(write.boostUntil));
+      if(write.voiceBaseline)write.voiceBaseline={...write.voiceBaseline,recordedAt:Timestamp.fromDate(new Date(write.voiceBaseline.recordedAt))};
+      if(!this.state.profile)await this.saveProfile({});
+      await updateDoc(doc(this.db,'users',this.uid()),{riskProfile:write});
+    }
+    this.state.profile={...(this.state.profile||{protectionEnabled:true}),riskProfile:stored};this.persist();this.emit();
+  }
+  async deleteRiskProfile() {
+    if(!this.state.demo)await this.sdk.updateDoc(this.sdk.doc(this.db,'users',this.uid()),{riskProfile:this.sdk.deleteField()});
+    if(this.state.profile){const {riskProfile:_removed,...rest}=this.state.profile;this.state.profile=rest;}
+    this.persist();this.emit();
+  }
   async addContact(contact) {
     const value={displayName:String(contact.displayName||'').trim(),relationshipLabel:String(contact.relationshipLabel||'').trim(),phone:String(contact.phone||'').trim(),verificationPreference:['callback','passphrase','other-channel'].includes(contact.verificationPreference)?contact.verificationPreference:'callback'};
     if(!value.displayName||value.displayName.length>80||value.relationshipLabel.length>60||!/^[+0-9() .-]{7,30}$/.test(value.phone))throw new Error('Enter a contact name and a valid phone number.');
@@ -204,17 +234,19 @@ export class Client {
     }
     return result;
   }
-  async analyze(input,signal) {
+  async analyze(request,signal) {
+    const protection=protectionFor(this.state);
+    const input={...request,protection};
     if(!this.state.demo)return this.api(input.channel==='call'?'/api/analyze-call':'/api/analyze-sms',input,'POST',signal);
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     parseCommunication(input); // Same validation as the server, so demo and connected modes reject the same input.
-    const insight=analyzeConversation(turnsFromText(input.text));
+    const insight=analyzePersonal(turnsFromText(input.text),protection);
     const result={...analyzeText(contactText(input.text)),sessionId:input.sessionId||crypto.randomUUID(),sequence:input.sequence,local:true};
     result.risk=maxLevel(result.risk,insight.level);
     result.report=buildReport({communicationType:input.channel,level:result.risk,insight,source:'rules'});
     result.provider={id:'rules',label:'Rule-based checks in your browser',model:'deterministic rules'};
     const previous=this.state.incidents.find((i)=>i.id===result.sessionId);
-    const incident={id:result.sessionId,channel:input.channel,source:input.source||'user',risk:result.risk,riskScore:result.report.risk_score,reasonCodes:[...new Set(result.reasons.map((r)=>r.code))],tactics:[...new Set(insight.findings.map((f)=>f.tactic))],predictedAction:result.report.predicted_next_action?.action||null,analysisSource:'rules',updatedAt:new Date().toISOString(),recovery:previous?.recovery||[]};
+    const incident={id:result.sessionId,channel:input.channel,source:input.source||'user',risk:result.risk,riskScore:result.report.risk_score,reasonCodes:[...new Set(result.reasons.map((r)=>r.code))],tactics:[...new Set(insight.findings.map((f)=>f.tactic))],predictedAction:result.report.predicted_next_action?.action||null,analysisSource:'rules',...(insight.personal.findings.length?{focusAreas:[...new Set(insight.personal.findings.map((f)=>f.focus))]}:{}),updatedAt:new Date().toISOString(),recovery:previous?.recovery||[]};
     if(previous?.risk==='high')incident.risk='high';
     const indicators=indicatorsToStore(extractIndicators({text:input.text,sender:input.sender}),incident.risk);
     if(indicators)incident.indicators=indicators;

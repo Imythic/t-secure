@@ -37,6 +37,9 @@ async function finishOnboarding(page){
   await page.getByRole('button',{name:'Save contact'}).click();
   await expect(page.locator('.contact-list').getByText('Jordan')).toBeVisible();
   await page.getByRole('button',{name:/Continue/}).click();
+  await page.getByLabel('Occupation').selectOption('business-owner');
+  await page.getByRole('button',{name:/Continue/}).click();
+  await page.getByRole('button',{name:/Skip for now/}).click();
   await page.getByLabel(/I understand how T-Secure uses my information/).check();
   await page.getByRole('button',{name:/Finish setup/}).click();
   await page.getByRole('link',{name:/Go to my dashboard/}).click();

@@ -240,3 +240,31 @@ ol.checklist{list-style:none;padding:0;margin:0}
   .privacy-band{flex-direction:column;padding:22px}
   .expected{grid-template-columns:1fr}
 }
+
+/* Risk profile and voice check-in */
+.protection-level{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:6px 10px;border-radius:999px;font-size:14px;font-weight:750;white-space:nowrap;background:#f4edf3;color:#6b4a62}
+.protection-level .icon{width:16px;height:16px}
+.protection-level.heightened{background:var(--rose);color:var(--magenta-dark)}
+.protection-level.maximum{background:var(--magenta-dark);color:white}
+.focus-list{list-style:none;padding:0;margin:10px 0 18px;display:grid;gap:12px}
+.focus-list li{display:grid;gap:3px;padding:12px 14px;border-left:3px solid var(--magenta);background:#fbf7fa;border-radius:0 10px 10px 0}
+.focus-list span{font-size:16px}
+.focus-list small{font-size:14px;color:var(--muted)}
+.personal-note{margin:14px 0;padding:14px 16px;border:1px solid var(--magenta);border-radius:12px;background:#fff7fb}
+.personal-note ul{list-style:none;padding:0;margin:8px 0;display:grid;gap:8px}
+.personal-note blockquote{margin:4px 0;font-style:italic}
+.personal-note small{display:block;color:var(--muted);font-size:14px}
+.personal-note p{margin:8px 0}
+.voice-checkin{display:grid;gap:14px}
+.voice-prompts{margin:0;padding-left:22px;display:grid;gap:6px;font-size:17px}
+.voice-live{display:flex;align-items:center;gap:10px;font-size:18px}
+.voice-dot{width:14px;height:14px;border-radius:50%;background:var(--magenta);animation:voice-pulse 1.2s ease-in-out infinite}
+@keyframes voice-pulse{50%{opacity:.35}}
+.voice-question{font-size:26px;font-weight:750;line-height:1.3;color:var(--ink);margin:0}
+.voice-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0}
+.voice-metrics div{padding:12px;border:1px solid var(--line);border-radius:10px;background:white}
+.voice-metrics dt{font-size:14px;color:var(--muted)}
+.voice-metrics dd{margin:2px 0 0;font-size:20px;font-weight:750}
+.voice-checkin audio{width:100%}
+.voice-checkin .notice ul{margin:6px 0;padding-left:20px}
+html[data-contrast="high"] .personal-note,html[data-contrast="high"] .voice-metrics div{border-width:2px;border-color:#5e525f}

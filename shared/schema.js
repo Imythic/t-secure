@@ -1,3 +1,4 @@
+import { parseProtection } from './risk-profile.js';
 export const CATEGORIES = Object.freeze({
   credentials: { label: 'Passwords & codes', advice: 'Keep passwords and verification codes to yourself. Call the organization using a number you already trust.' },
   payment: { label: 'Payment pressure', advice: 'Pause before sending money. Gift cards and cryptocurrency are warning signs when demanded as payment.' },
@@ -17,7 +18,9 @@ export function parseCommunication(body) {
   if (!Number.isSafeInteger(body.sequence) || body.sequence < 0 || body.sequence > 10000) throw new Error('Invalid sequence.');
   if (body.sessionId && !/^[a-zA-Z0-9-]{1,80}$/.test(body.sessionId)) throw new Error('Invalid session.');
   if (body.sender != null && (typeof body.sender !== 'string' || body.sender.length > 40)) throw new Error('Enter a sender of up to 40 characters.');
-  return { channel: body.channel, text: body.text.trim(), sequence: body.sequence, sessionId: body.sessionId || null, source: body.source === 'simulation' ? 'simulation' : 'user', sender: body.sender?.trim() || '' };
+  // Only derived protection codes arrive here, never the risk profile answers behind them.
+  const protection = parseProtection(body.protection);
+  return { channel: body.channel, text: body.text.trim(), sequence: body.sequence, sessionId: body.sessionId || null, source: body.source === 'simulation' ? 'simulation' : 'user', sender: body.sender?.trim() || '', protection };
 }
 export function validateModelAnalysis(value, text) {
   if (!value || !RISKS.includes(value.risk) || !Array.isArray(value.reasons) || value.reasons.length > 8) throw new Error('Invalid analysis response.');

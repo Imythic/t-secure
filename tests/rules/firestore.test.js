@@ -1,7 +1,7 @@
 import test, {before,after,beforeEach} from 'node:test';
 import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertFails,assertSucceeds} from '@firebase/rules-unit-testing';
-import {doc,getDoc,setDoc,updateDoc,deleteDoc,serverTimestamp} from 'firebase/firestore';
+import {doc,getDoc,setDoc,updateDoc,deleteDoc,deleteField,serverTimestamp,Timestamp} from 'firebase/firestore';
 let environment;
 before(async()=>{
   environment=await initializeTestEnvironment({projectId:'demo-tsecure',firestore:{host:'127.0.0.1',port:8080,rules:await readFile(new URL('../../firestore.rules',import.meta.url),'utf8')}});
@@ -29,6 +29,23 @@ test('profiles reject psychological or scoring fields and invalid preferences',a
   await assertFails(setDoc(doc(db(),'users/alice'),{preferences:{mentalHealth:'x'}},{merge:true}));
   await assertFails(setDoc(doc(db(),'users/alice'),{preferences:{textSize:'huge'}},{merge:true}));
   await assertFails(setDoc(doc(db(),'users/alice'),{email:'someone-else@example.com'},{merge:true}));
+});
+test('owners can save, replace, and delete an allowlisted risk profile',async()=>{
+  const riskProfile={relationshipStatus:'widowed',hasGrandchildren:true,riskHistory:['gambling','previous-scam'],wellbeing:['memory'],occupation:'retired',
+    voiceBaseline:{recordedAt:Timestamp.now(),durationSec:60,speechRatio:0.55,pausesPerMin:8,wordsPerMin:120,prompts:['breakfast','grandchild']},updatedAt:serverTimestamp()};
+  await assertSucceeds(updateDoc(doc(db(),'users/alice'),{riskProfile}));
+  await assertSucceeds(updateDoc(doc(db(),'users/alice'),{riskProfile:{occupation:'executive'}}));
+  await assertSucceeds(updateDoc(doc(db(),'users/alice'),{riskProfile:deleteField()}));
+});
+test('risk profiles reject free text, scores, unknown values, raw voice data, and other users',async()=>{
+  const target=doc(db(),'users/alice');
+  await assertFails(updateDoc(target,{riskProfile:{vulnerabilityScore:83}}));
+  await assertFails(updateDoc(target,{riskProfile:{wellbeing:['schizophrenia']}}));
+  await assertFails(updateDoc(target,{riskProfile:{relationshipStatus:'complicated'}}));
+  await assertFails(updateDoc(target,{riskProfile:{notes:'Lonely since 2020'}}));
+  await assertFails(updateDoc(target,{riskProfile:{voiceBaseline:{recordedAt:Timestamp.now(),durationSec:60,speechRatio:0.5,pausesPerMin:5,prompts:[],transcript:'I had toast'}}}));
+  await assertFails(updateDoc(target,{riskProfile:{voiceBaseline:{recordedAt:Timestamp.now(),durationSec:60,speechRatio:4,pausesPerMin:5,prompts:[]}}}));
+  await assertFails(updateDoc(doc(db('bob'),'users/alice'),{riskProfile:{occupation:'retired'}}));
 });
 test('other, unverified, and unauthenticated users cannot read private data',async()=>{
   await assertFails(getDoc(doc(db('bob'),'users/alice')));

@@ -24,7 +24,7 @@ With no `.env`, the app runs in **demo mode**: the landing page offers "Explore 
 Checks:
 
 ```bash
-npm test           # 69 unit tests: engines, validation, providers, service, benchmark
+npm test           # 82 unit tests: engines, validation, providers, service, benchmark, risk profile, voice baseline
 npm run build
 npm run test:e2e   # 34 browser tests (desktop + mobile Chrome), demo mode
 npm run test:bundle  # proves server secrets never enter the browser bundle
@@ -60,7 +60,7 @@ Only `VITE_` variables reach the browser. Never give a server secret that prefix
 1. Authentication → Sign-in method: enable **Email/Password** and **Google** (set a support email).
 2. Authentication → Settings → **Authorized domains**: `localhost` is included by default. Add your Vercel domain before deploying.
 
-Behavior: sign-up requires a name, a valid email, and a password of 8+ characters with confirmation. A verification email is sent, and protected pages, private Firestore data, and every API stay locked until the email is verified (enforced by the rules and the server, not just the UI). Password reset and Google popup sign-in are included. New accounts go through the six-step **Personal Protection Profile** onboarding.
+Behavior: sign-up requires a name, a valid email, and a password of 8+ characters with confirmation. A verification email is sent, and protected pages, private Firestore data, and every API stay locked until the email is verified (enforced by the rules and the server, not just the UI). Password reset and Google popup sign-in are included. New accounts go through the eight-step **Personal Protection Profile** onboarding, which includes the optional **risk profile** and **voice check-in** (see section 5a).
 
 ## 5. Firestore and security rules
 
@@ -72,13 +72,13 @@ firebase deploy --only firestore:rules,firestore:indexes --project YOUR_PROJECT_
 
 | Path | Written by | Contents |
 | --- | --- | --- |
-| `users/{uid}` | Owner | `displayName`, `email`, `createdAt`, `onboardingCompleted`, `protectionEnabled`, `preferences` (text size, contrast, motion, language, warning style, warning sound, verification methods, "has family passphrase" flag) |
+| `users/{uid}` | Owner | `displayName`, `email`, `createdAt`, `onboardingCompleted`, `protectionEnabled`, `preferences` (text size, contrast, motion, language, warning style, warning sound, verification methods, "has family passphrase" flag), optional `riskProfile` (relationship status, has grandchildren, risk history, wellbeing, occupation, voice baseline numbers, temporary boost date) |
 | `users/{uid}/trustedContacts/{id}` | Owner | `displayName`, `relationshipLabel`, `phone`, `verificationPreference`, `createdAt` (up to 5) |
 | `users/{uid}/incidents/{id}` | **Server only** | The brief's *analyses*: channel, risk level, evidence score, tactic and category codes, predicted action code, analysis source, timestamps. Owner may update only the recovery checklist. |
 | `users/{uid}/warnings/{id}` | Owner | `warningType`, `warningLevel`, `displayedAt` (server time), `customerAction` |
 | `evaluationScenarios/{id}` | **Server only** | Benchmark scenarios, expected labels, and measured `modelResults` |
 
-The rules allow only the verified owner to read their data, validate every field and value against an allowlist (no score, psychological, or health fields can be written), and deny all client access to evaluation results and rate limits. **No raw message, transcript, evidence quote, or model prose is ever stored.**
+The rules allow only the verified owner to read their data, validate every field and value against an allowlist (sensitive answers are allowed only as fixed codes inside `riskProfile`; no free text, scores, audio, or transcripts), and deny all client access to evaluation results and rate limits. **No raw message, transcript, voice recording, evidence quote, or model prose is ever stored.**
 
 Rules tests (needs Firebase CLI and Java 21+):
 
@@ -86,6 +86,27 @@ Rules tests (needs Firebase CLI and Java 21+):
 firebase emulators:exec --only firestore --project demo-tsecure "npm run test:rules"
 firebase emulators:exec --only auth,firestore --project demo-tsecure "npm run test:auth"
 ```
+
+## 5a. Risk profile and voice check-in
+
+The optional risk profile records what scammers might target, so T-Secure can protect the customer sooner. Logic lives in `shared/risk-profile.js` and `shared/voice-baseline.js`.
+
+| Answer | Effect |
+| --- | --- |
+| Relationship status: single, widowed, divorced | Focus area: romance and companionship scams |
+| Relationship status: married or partnered | Warnings suggest talking to the spouse or partner before acting |
+| Has grandchildren | Focus area: grandparent and family-emergency scams |
+| Gambling or betting | Focus area: prizes, lotteries, and "sure win" offers |
+| Lost money to a scam before | Focus area: fake money-recovery offers |
+| Debt or money worries | Focus area: loan, grant, and debt-relief offers |
+| Occupation: business owner, manager or executive, finance or admin | Focus area: business pitches, invoices, and payment-detail changes |
+| Any health or wellbeing answer (memory, mood, impulsivity, other) | **Maximum protection** |
+
+**Protection levels.** *Standard*: unchanged behavior. *Heightened* (any focus area): a strong focus-area phrase in the other party's words raises Low to Elevated, and a focus match with pressure or a request raises to High. *Maximum*: also treats any pressured request as High, flags pressure sooner (never when the caller invited a callback, so Scenario C stays Low), always interrupts even with "Fewer interruptions", and prompts a call to a trusted contact first.
+
+**Guarantees.** The profile never lowers a rating. Every raise quotes the caller's exact words and says why ("Why this warning is stronger for you"). Analysis requests carry only `protection: {level, focus[]}`, never the answers. The server re-validates the codes, and incidents store only matched focus codes.
+
+**Voice check-in.** A 60-second recording with four prompts ("What did you have for breakfast today?", "What is your first memory of your grandchild?", and two others). Audio stays in browser memory for playback and is discarded. Only speaking time, long pauses per minute, words per minute (when browser speech recognition is available), and the prompts answered are saved. Memory prompts become verification questions for callers who claim to be family. A later check-in is compared with the baseline, and a large change offers (never forces) seven days of extra protection. It is not a diagnosis.
 
 ## 6. AI provider configuration
 
@@ -167,7 +188,7 @@ tests/, e2e/    unit, rules, and browser tests
 
 ## Product rules this build follows
 
-No carrier integration is claimed, and no real call is monitored. There are no fabricated statistics or benchmark numbers, no customer vulnerability scores, and no profiling of a caller's personality or anyone's emotions. Trusted contacts are never contacted automatically. Every warning explains its evidence and uncertainty, and a legitimate-call scenario is included. API keys stay server-side, and private records are owner-only.
+No carrier integration is claimed, and no real call is monitored. There are no fabricated statistics or benchmark numbers, and no profiling of a caller's personality or anyone's emotions. The customer's optional risk profile is self-reported, owner-only, can only add protection, and is never shown as a score. Trusted contacts are never contacted automatically. Every warning explains its evidence and uncertainty, and a legitimate-call scenario is included. API keys stay server-side, and private records are owner-only.
 
 ## Sources
 

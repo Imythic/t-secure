@@ -1,10 +1,13 @@
 import { h, icon, date, badge, riskLabels, highlight, contactAction } from './ui.js';
 import { CATEGORIES } from '../shared/schema.js';
 import { scenarios, messageSamples } from '../shared/fixtures.js';
-import { analyzeConversation, TACTICS, NEXT_ACTIONS } from '../shared/prediction.js';
+import { TACTICS, NEXT_ACTIONS } from '../shared/prediction.js';
+import { analyzePersonal, interruptsForCaution, PROTECTION_LABELS } from '../shared/risk-profile.js';
+import { memoryQuestions } from '../shared/voice-baseline.js';
 import { inspectLinks } from '../shared/detection.js';
 import { extractIndicators, findConnections } from '../shared/network.js';
-import { preferencesOf, MAX_CONTACTS } from './client.js';
+import { preferencesOf, MAX_CONTACTS, riskProfileOf, protectionFor } from './client.js';
+import { riskProfileFields, riskProfileSummary, voiceCheckin, protectionBadge } from './pages/risk-profile.js';
 import { preferenceFields, contactForm, contactList, WARNING_STYLES, VERIFICATION_METHODS, TEXT_SIZES, LANGUAGES } from './pages/onboarding.js';
 
 const nav=[
@@ -48,7 +51,7 @@ export function home(state) {
   const recent=state.incidents.slice(0,3);
   const warnings=state.incidents.filter((i)=>i.risk==='high').slice(0,2);
   return `<div class="home-heading"><div><h1>${name&&name!=='Demo'?'Welcome back, '+h(name)+'.':'Welcome to T-Secure.'}</h1><p>You don’t have to spot every scam alone. Let’s take a closer look, together.</p></div>
-      <section class="status-card" aria-labelledby="status-title"><span class="status-dot"></span><div><h2 id="status-title">Protection is on</h2><p>${p.warningStyle==='high-only'?'Interrupting only for high risk':'Standard warnings'} · ${state.contacts.length} trusted ${state.contacts.length===1?'contact':'contacts'} · ${p.verificationMethods.length} verification ${p.verificationMethods.length===1?'method':'methods'}</p><a class="text-link" href="#/profile">View your protection profile ${icon('arrow')}</a></div></section></div>
+      <section class="status-card" aria-labelledby="status-title"><span class="status-dot"></span><div><h2 id="status-title">Protection is on</h2><p>${p.warningStyle==='high-only'?'Interrupting only for high risk':'Standard warnings'} · ${state.contacts.length} trusted ${state.contacts.length===1?'contact':'contacts'} · ${p.verificationMethods.length} verification ${p.verificationMethods.length===1?'method':'methods'}</p><p>${protectionBadge(riskProfileOf(state))}</p><a class="text-link" href="#/profile">View your protection profile ${icon('arrow')}</a></div></section></div>
     <section class="quick-grid" aria-label="Quick access">
       <a class="quick-tile" href="#/messages"><span class="task-symbol lilac">${icon('message')}</span><h2>Check a message</h2><p>Paste a text or link you’re unsure about.</p></a>
       <a class="quick-tile" href="#/calls"><span class="task-symbol pink">${icon('phone')}</span><h2>Call protection</h2><p>See live protection on a simulated call.</p></a>
@@ -96,8 +99,18 @@ const verifyGuidance={
   romance:'Talk it over with someone you trust. Never send money to someone you haven’t met in person.',
   support:'Contact the company through its official website, typed in yourself. Real support teams don’t call unexpectedly.',
 };
+// Explains, with the quoted words, why the customer's risk profile made a warning stronger.
+export function personalNote(insight) {
+  const personal=insight?.personal;
+  if(!personal||(!personal.boosts.length&&!personal.findings.length))return '';
+  return `<section class="personal-note" aria-label="Your risk profile"><span class="prediction-eyebrow">${icon('spark')}${h(PROTECTION_LABELS[personal.level])}</span>
+    ${personal.findings.length?`<ul>${personal.findings.map((f)=>`<li><strong>${h(f.label)}</strong><blockquote>“${h(f.excerpt)}”</blockquote><small>${h(f.why)}</small></li>`).join('')}</ul>`:''}
+    ${personal.boosts.length?`<p><strong>Why this warning is stronger for you:</strong> ${h(personal.boosts.at(-1).reason)}</p>`:''}
+    <a class="text-link" href="#/profile">Based on your risk profile ${icon('arrow')}</a></section>`;
+}
 export function verificationSteps(state,pattern) {
   const p=preferencesOf(state);
+  const rp=riskProfileOf(state);
   const copy={
     callback:verifyGuidance[pattern]||'Hang up. Call back on a number you already have saved, not one the caller gives you.',
     passphrase:p.hasFamilyPassphrase?'Ask for your family passphrase. If they can’t give it, hang up.':'Ask something only the real person would know. Consider setting up a family passphrase later.',
@@ -106,7 +119,10 @@ export function verificationSteps(state,pattern) {
   };
   const order=[...p.verificationMethods,...VERIFICATION_METHODS.map(([v])=>v).filter((v)=>!p.verificationMethods.includes(v))];
   const relational=['family','romance',undefined].includes(pattern);
-  return order.filter((m)=>relational||m==='callback').map((m)=>copy[m]);
+  const steps=order.filter((m)=>relational||m==='callback').map((m)=>copy[m]);
+  if(relational)for(const question of memoryQuestions(rp.voiceBaseline))steps.push(`Ask about a memory only the real person would know, like “${question}” You recorded your own answer in your voice check-in, so you’ll know if theirs fits.`);
+  if(['married','partnered'].includes(rp.relationshipStatus))steps.push(`Before sending money or sharing anything, talk it over with your ${rp.relationshipStatus==='married'?'spouse':'partner'}.`);
+  return steps;
 }
 export function callWarningDialog(snapshot,state,panel=null) {
   const prediction=snapshot.insight?.prediction;
@@ -122,6 +138,8 @@ export function callWarningDialog(snapshot,state,panel=null) {
     ${tactics.length?`<h3 class="dialog-subhead">Detected</h3><ul class="detected-list">${tactics.map((f)=>`<li>${icon('check')}${f.tactic==='trust'&&prediction?.pattern==='family'?'Possible family impersonation':h(f.label)}</li>`).join('')}</ul>`:''}
     ${prediction?`<div class="dialog-prediction"><span>${icon('spark')}Potential next action · ${h(prediction.strengthLabel)}</span><strong>${prediction.confirmed?`They asked you to ${h(lowerFirst(prediction.confirmed.label))}. Next, they may ${h(lowerFirst(prediction.followUp))}.`:`The caller may ${h(lowerFirst(prediction.action))}.`}</strong><small>${h(prediction.uncertainty)}</small></div>`:''}
     <div class="dialog-recommendation">${icon('shield')}<p><strong>Recommended:</strong> ${h(prediction?.advice||'Hold off on sharing codes or sending money. Call back using a number you already trust.')}</p></div>
+    ${snapshot.insight?.personal?.level==='maximum'&&state.contact?`<div class="dialog-recommendation">${icon('heart')}<p><strong>Before you do anything:</strong> call ${h(state.contact.displayName)} for a second opinion.</p>${contactAction(state.contact)}</div>`:''}
+    ${personalNote(snapshot.insight)}
     ${panel?panels[panel]:''}</div>
     <div class="warning-actions" role="group" aria-label="Warning options">
       <button class="button secondary" data-action="warning-panel" data-panel="verify" aria-expanded="${panel==='verify'}" aria-controls="warning-panel">${icon('phone')}How do I verify this person?</button>
@@ -137,7 +155,7 @@ export function callWorkspace(state,ui) {
   const scenario=scenarios.find((s)=>s.id===ui.scenario)||scenarios[0];
   const analysis=snapshot.analysis;
   const labels={idle:'Ready when you are',playing:'Live · analyzing',paused:'Paused',ended:'Call ended',completed:'Call complete'};
-  const quietCaution=preferencesOf(state).warningStyle==='high-only';
+  const quietCaution=!interruptsForCaution(protectionFor(state),preferencesOf(state).warningStyle);
   const alert=active&&snapshot.alert&&!(snapshot.alert.risk==='caution'&&quietCaution)?snapshot.alert:null;
   const prediction=snapshot.insight?.prediction;
   const risk=effectiveRisk(snapshot);
@@ -148,7 +166,7 @@ export function callWorkspace(state,ui) {
   <div class="call-grid"><section class="conversation-panel"><div class="call-person"><span class="call-avatar">${h(scenario.initials)}</span><div><h2>${h(scenario.caller)}</h2>${scenario.number?`<span class="call-number">${h(scenario.number)}</span>`:''}<span class="call-claim">${icon('info')}Identity claim: ${h(scenario.claim||'None')} · <em>unverified</em></span><span class="call-state"><i class="${snapshot.status==='playing'?'pulsing':''}"></i>${labels[snapshot.status]} · <span id="call-timer" aria-label="Call duration">${formatDuration(ui.callElapsed)}</span></span></div><span class="small-chip">${snapshot.turns.length?h(riskLabels[risk]):'Simulated call'}</span></div>
     <div class="transcript" role="log" tabindex="0" aria-label="Live transcript" aria-live="off">${snapshot.turns.length?`<ol>${snapshot.turns.map((t)=>`<li class="turn ${t.speaker}"><span>${t.speaker==='contact'?'Caller':'You · sample response'}${t.timestamp&&snapshot.turns[0]?.timestamp?' · '+formatDuration(new Date(t.timestamp)-new Date(snapshot.turns[0].timestamp)):''}</span><p>${highlight(t.text,marks)}</p></li>`).join('')}</ol>`:`<div class="transcript-empty">${icon('headphones')}<h3>${h(scenario.name)}</h3><p>${h(scenario.description)}</p><p class="quiet-note">The transcript appears line by line, as if it were being transcribed live. Nothing is recorded or connected to your phone.</p></div>`}</div>
     <div class="call-controls">${active?`<button class="button secondary" data-action="${snapshot.status==='paused'?'resume':'pause'}">${icon(snapshot.status==='paused'?'play':'pause')}${snapshot.status==='paused'?'Resume':'Pause'}</button><button class="button secondary" data-action="restart-call">${icon('refresh')}Restart</button><button class="button danger" data-action="end-call">${icon('phone')}End demo call</button>`:`<button class="button primary" data-action="start-call">${icon('play')}${snapshot.status==='idle'?'Start simulated call':'Play again'}</button><span class="quiet-note">${snapshot.status==='idle'?'You can pause, restart, or end at any time.':'You stayed in control. That’s the habit.'}</span>`}</div></section>
-    <aside class="call-guidance" tabindex="-1">${analysisPanel({...analysis,risk,score:snapshot.insight?.score},state,true)}${snapshot.turns.length?predictionCard(snapshot):''}${connections&&(connections.campaigns.length||connections.history.length)?networkPanel(connections,state):''}<div class="simple-note">${icon('lock')}<p>Voices and caller names can be imitated. Use a saved number to verify independently.</p></div></aside></div>
+    <aside class="call-guidance" tabindex="-1">${analysisPanel({...analysis,risk,score:snapshot.insight?.score},state,true)}${personalNote(snapshot.insight)}${snapshot.turns.length?predictionCard(snapshot):''}${connections&&(connections.campaigns.length||connections.history.length)?networkPanel(connections,state):''}<div class="simple-note">${icon('lock')}<p>Voices and caller names can be imitated. Use a saved number to verify independently.</p></div></aside></div>
     ${snapshot.turns.length?manipulationTimeline(snapshot):''}
     ${!active&&snapshot.turns.length?`<section class="call-followup"><h2>After the call, take your next step.</h2><p>${risk==='high'?'If you shared information or sent money, the Recovery Assistant can help right away.':'Keep practicing an independent callback before acting on unexpected requests.'}</p><div class="button-row"><a class="button primary" href="#/recovery${snapshot.sessionId?'/'+h(snapshot.sessionId):''}">Open the Recovery Assistant ${icon('arrow')}</a><a class="text-link" href="#/learn">Build a safer habit ${icon('book')}</a></div></section>`:''}`;
 }
@@ -192,10 +210,10 @@ export function analysisPanel(analysis,state,call=false) {
     ${['high','caution','unknown'].includes(risk)?`<div class="guidance-actions">${contactAction(state.contact)}<a class="text-link" href="#/learn">View warning signs ${icon('arrow')}</a>${!call?'<a class="text-link" href="#/recovery">Already acted on it? Find next steps.</a>':''}</div>`:''}
     <div class="analysis-source">${icon('info')}${sourceLabel(analysis,state)}</div>${analysis?.incomplete?'<p class="incomplete-note">AI analysis could not finish. Rule-based warnings remain active.</p>':''}</section>`;
 }
-function checkedAnalysis(ui) {
+function checkedAnalysis(ui,state) {
   const checked=ui.messageChecked;
   if(!checked||!ui.messageResult)return null;
-  const insight=analyzeConversation([{speaker:'contact',text:checked.text}]);
+  const insight=analyzePersonal([{speaker:'contact',text:checked.text}],protectionFor(state));
   const rank={low:0,unknown:0,caution:1,high:2};
   const risk=rank[insight.level]>rank[ui.messageResult.risk]?insight.level:ui.messageResult.risk;
   return {checked,insight,risk};
@@ -215,6 +233,7 @@ function messageAssessment(result,insight,risk,state) {
     <span class="assessment-eyebrow">Risk level · evidence score ${h(score)}/100</span><h2 id="assessment-title">${h(riskLabels[risk])}</h2><p>${why}</p>
     ${insight.orgs.length?`<p class="impersonation-note">${icon('person')}<span><strong>Claims to be:</strong> ${h(insight.orgs.map((o)=>ORG_CLAIMS[o]||o).join(', '))}. Anyone can claim this. Verify through a contact you find yourself.</span></p>`:''}
     ${indicators.length?`<h3 class="assessment-subhead">Suspicious indicators</h3><ul class="reason-list">${indicators.map(item=>`<li><strong>${h(item.label)}</strong><blockquote>“${h(item.evidence)}”</blockquote></li>`).join('')}</ul>`:''}
+    ${personalNote(insight)}
     ${result.report?.model_explanation?`<p class="model-explanation"><strong>AI explanation:</strong> ${h(result.report.model_explanation)}</p>`:''}
     <div class="recommended">${icon('shield')}<p><strong>Recommended:</strong> ${h(result.report?.recommended_action||(insight.prediction?.advice)||'Verify independently before acting.')}</p></div>
     <div class="analysis-source">${icon('info')}${sourceLabel(result,state)}. ${result.analysisSource==='hybrid'?'AI can raise a rating by one level at most.':''}</div>${result.incomplete?'<p class="incomplete-note">AI analysis could not finish. Rule-based warnings remain active.</p>':''}</section>`;
@@ -269,7 +288,7 @@ function messageActions(insight,risk,result,state) {
   </div></section>`;
 }
 export function messages(state,ui) {
-  const analysis=checkedAnalysis(ui);
+  const analysis=checkedAnalysis(ui,state);
   const connections=analysis?findConnections(extractIndicators(analysis.checked),{incidents:state.incidents,excludeId:ui.messageResult.sessionId}):null;
   return intro('SMS and link scanner','Paste a suspicious text or website address. We’ll explain the warning signs and what to do next.')+
   `<div class="message-grid"><section class="form-panel"><form id="message-form"><label for="message-text">Message or website address</label><textarea id="message-text" name="text" rows="7" maxlength="12000" placeholder="Paste the message here. You don’t need to open any links." required>${h(ui.messageText)}</textarea><div class="input-meta"><span>Keep personal details out when possible.</span><span>12,000 character limit</span></div><label for="message-sender">Who sent it? <span class="optional-label">Optional</span></label><input id="message-sender" name="sender" maxlength="40" autocomplete="off" value="${h(ui.messageSender)}" placeholder="Phone number or sender name"><p class="field-help">Helps spot repeated senders across your checks.</p><button class="button primary" type="submit" ${ui.messageBusy?'disabled':''}>${icon(ui.messageBusy?'refresh':'shield')}${ui.messageBusy?'Checking…':'Analyze message'}</button></form><div class="sample-options"><p>Or try an example</p>${messageSamples.map((s,i)=>`<button class="sample-button" data-action="message-sample" data-index="${i}">${h(s.name)}${icon('plus')}</button>`).join('')}</div></section><aside>${analysis?messageAssessment(ui.messageResult,analysis.insight,analysis.risk,state):`<div class="checking-empty">${icon('message')}<h2>A little context helps.</h2><p>Include what the sender is asking you to do. We’ll check the language and the structure of any links.</p><div class="simple-note">${icon('lock')}<p>Submitted links stay as text. We never open them.</p></div></div>`}</aside></div>
@@ -284,25 +303,27 @@ export function profileSummary(state) {
     <section class="settings-section"><div class="section-heading">${icon('phone')}<div><h2>How you verify callers</h2><p>Shown first when a warning appears.</p></div></div><ul class="check-list">${p.verificationMethods.length?p.verificationMethods.map((m)=>`<li>${icon('check')}${h(VERIFICATION_METHODS.find(([v])=>v===m)?.[1])}</li>`).join(''):'<li>No preference chosen yet.</li>'}</ul><p class="field-help">${p.hasFamilyPassphrase?'You have a family passphrase. We never store it.':'No family passphrase set up. Consider agreeing on one with your family.'}</p></section>
     <section class="settings-section"><div class="section-heading">${icon('person')}<div><h2>Trusted contacts</h2><p>Optional. Never contacted automatically.</p></div></div>${state.contacts.length?contactList(state.contacts).replace(/<button[\s\S]*?<\/button>/g,''):'<p>No trusted contacts yet.</p>'}</section>
     <section class="settings-section"><div class="section-heading">${icon('settings')}<div><h2>Display and language</h2><p>Applied across T-Secure.</p></div></div><p>Text size: ${h(TEXT_SIZES.find(([v])=>v===p.textSize)?.[1])} · ${p.highContrast?'High contrast':'Standard contrast'} · ${p.reduceMotion?'Reduced motion':'Standard motion'}</p><p class="field-help">Language: ${h(LANGUAGES.find(([v])=>v===p.language)?.[1])}</p></section>
-  </div><div class="button-row"><a class="button primary" href="#/settings">${icon('settings')}Change preferences</a></div>
-  <p class="privacy-footnote">${icon('lock')}This profile customizes protection. It never scores, ranks, or judges you.</p>`;
+  </div>${riskProfileSummary(state.profile?.riskProfile)}<div class="button-row"><a class="button primary" href="#/settings">${icon('settings')}Change preferences</a></div>
+  <p class="privacy-footnote">${icon('lock')}This profile exists only to protect you. It can raise your protection, never lower it, and it is never shared.</p>`;
 }
 export function profile(state,tLife=false) {
   return tLife?intro('Your T-Life profile preview.','A concept of how the same Protection Profile could appear inside T-Life.')+
     `<section class="t-life-shell"><header class="t-life-header"><span class="t-life-logo">T<span>Life</span></span><span class="small-chip">Concept demo</span></header><nav class="t-life-crumb" aria-label="T-Life preview breadcrumb"><span>Manage</span>${icon('chevron')}<span>T-Secure</span>${icon('chevron')}<strong>Protection profile</strong></nav><div class="t-life-body">${profileSummary(state)}</div><p class="t-life-disclaimer">A web prototype for a possible future integration. It does not connect to or modify the actual T-Life app, and T-Mobile has not approved it.</p></section>`:
-    intro('Your Personal Protection Profile','How T-Secure warns you, how you prefer to verify callers, and who you trust.')+profileSummary(state);
+    intro('Your Personal Protection Profile','How T-Secure warns you, how you verify callers, who you trust, and what scammers might target.')+profileSummary(state);
 }
-export function settings(state) {
+export function settings(state,ui) {
   const p=preferencesOf(state);
   const fields=preferenceFields(p,{withName:true,name:state.profile?.displayName||state.user?.displayName||''});
   return intro('Settings','Choose what feels right for you. You can change your mind anytime.')+
   `<div class="settings-grid"><div>
     <section class="settings-section" aria-labelledby="protection-heading"><div class="section-heading">${icon('shield')}<div><h2 id="protection-heading">Warning and verification preferences</h2><p>Warnings are always proportional to the evidence.</p></div></div><form id="preferences-form" data-section="protection">${fields.protection}<button class="button primary" type="submit">Save preferences</button></form></section>
     <section class="settings-section" aria-labelledby="access-heading"><div class="section-heading">${icon('person')}<div><h2 id="access-heading">Profile, accessibility, and language</h2><p>Display changes apply right away.</p></div></div><form id="preferences-form-access" data-section="accessibility">${fields.accessibility}<button class="button primary" type="submit">Save preferences</button></form></section>
+    <section class="settings-section" id="risk-profile" aria-labelledby="risk-heading"><div class="section-heading">${icon('spark')}<div><h2 id="risk-heading">Risk profile</h2><p>Optional. Tell us what scammers might target so we can protect you sooner.</p></div>${protectionBadge(riskProfileOf(state))}</div><form id="risk-profile-form">${riskProfileFields(state.profile?.riskProfile)}<div class="button-row"><button class="button primary" type="submit">Save risk profile</button>${state.profile?.riskProfile?`<button class="button secondary" type="button" data-action="delete-risk-profile">${icon('trash')}Delete risk profile</button>`:''}</div></form></section>
+    <section class="settings-section" id="voice" aria-labelledby="voice-heading"><div class="section-heading">${icon('headphones')}<div><h2 id="voice-heading">Voice check-in</h2><p>A one-minute recording that stays on this device.</p></div><span class="small-chip">Optional</span></div>${voiceCheckin(state.profile?.riskProfile,ui.voice)}</section>
     <section class="settings-section" id="trusted-contacts" aria-labelledby="contacts-heading"><div class="section-heading">${icon('heart')}<div><h2 id="contacts-heading">Trusted contacts</h2><p>Up to ${MAX_CONTACTS} people you can call for a second opinion.</p></div><span class="small-chip">Optional</span></div>${contactList(state.contacts)}${state.contacts.length<MAX_CONTACTS?contactForm('settings'):''}<p class="privacy-footnote">Never contacted automatically. A saved contact does not prove who an incoming caller is.</p></section>
   </div>
   <aside class="settings-aside">
-    <section class="simple-section"><h2>Privacy controls</h2><p>We save preferences, trusted contacts, and a summary of each check: date, risk level, warning categories, and what you chose to do. Raw messages and transcripts are never saved.</p><p>${state.incidents.length} ${state.incidents.length===1?'check':'checks'} and ${state.warnings.length} warning ${state.warnings.length===1?'record':'records'} saved.</p><button class="button secondary" data-action="delete-history" ${!state.incidents.length&&!state.warnings.length?'disabled':''}>${icon('trash')}Delete all history</button><a class="text-link" href="#/about">About this prototype ${icon('arrow')}</a></section>
+    <section class="simple-section"><h2>Privacy controls</h2><p>We save preferences, trusted contacts, your optional risk profile and voice baseline numbers, and a summary of each check: date, risk level, warning categories, and what you chose to do. Raw messages, transcripts, and voice recordings are never saved.</p><p>${state.incidents.length} ${state.incidents.length===1?'check':'checks'} and ${state.warnings.length} warning ${state.warnings.length===1?'record':'records'} saved.</p><button class="button secondary" data-action="delete-history" ${!state.incidents.length&&!state.warnings.length?'disabled':''}>${icon('trash')}Delete all history</button><a class="text-link" href="#/about">About this prototype ${icon('arrow')}</a></section>
     <section class="simple-section account-settings"><h2>Account</h2><p>${state.demo?'You’re exploring the demo. Your settings stay in this browser.':h(state.user.email)}</p>${state.demo?'<a class="button secondary" href="#/login">Sign in or create account</a><button class="button secondary" data-action="logout">Leave the demo</button>':`<button class="button secondary" data-action="logout">${icon('logout')}Sign out</button>`}
       <details class="danger-zone"><summary>${state.demo?'Reset the demo':'Delete my account'}</summary><p>${state.demo?'Removes demo preferences, contacts, and history from this browser.':'Permanently deletes your profile, trusted contacts, history, and sign-in. This cannot be undone.'}</p><button class="button danger" data-action="delete-account">${icon('trash')}${state.demo?'Reset demo':'Delete account permanently'}</button></details></section>
   </aside></div>`;
@@ -352,7 +373,7 @@ export function about() {
   return intro('Clear about what we do.','T-Secure is a working hackathon prototype for recognizing manipulation and building safer habits.')+
     `<div class="about-content"><section><h2>Calls are simulated.</h2><p>There is no carrier integration and no permission to monitor real calls. The app plays scripted, fictional conversations and analyzes the transcript progressively as it appears. A production version would transcribe consented audio with a speech-to-text model; that is not part of this prototype. Optional voices come from your browser’s text-to-speech.</p></section>
     <section><h2>Analysis sources are always labeled.</h2><p>Independent rules run first. On a configured server, the text also goes to one AI provider: NVIDIA Nemotron via OpenRouter, or Google Gemini. The model must quote exact evidence, its JSON is validated before use, and it can raise a rating by one level at most. If the provider is unavailable, you see that clearly. Demo mode uses rules in your browser and says so.</p></section>
-    <section><h2>No vulnerability scores. No profiling.</h2><p>Your Protection Profile only customizes how warnings look and how you verify callers. T-Secure never scores you, and never diagnoses a caller’s personality or anyone’s emotional state. It describes observable tactics in the words used.</p></section>
+    <section><h2>A risk profile that only protects you.</h2><p>You can optionally tell T-Secure what scammers might target: relationship status, grandchildren, gambling or past scams, health conditions, and occupation. These answers set a protection level and focus areas. They can raise a warning when the caller’s own words match a focus area, but never lower one, and never raise one without quoted evidence. The answers stay in your account; analysis requests receive only the level and focus codes. T-Secure never diagnoses anyone, and a voice check-in that sounds different only offers extra protection.</p></section>
     <section><h2>Synthetic voices are a future supporting signal.</h2><p>A cloned voice doesn’t prove fraud, and a human voice doesn’t prove legitimacy. Not all AI voices can be detected. T-Secure prioritizes the conversation, identity claims, payment requests, and verification you control: a saved number, a family passphrase, a callback, or another channel.</p></section>
     <section><h2>Scam Network Intelligence uses demo data.</h2><p>It compares derived indicators (sender, domains, impersonated identity, requests, tactics, and hashed wording) with a synthetic campaign dataset and your own earlier warnings. There is no global scam database here. The design is modular so a privacy-preserving, aggregated feed could be added later.</p></section>
     <section><h2>T-Mobile and T-Life are future opportunities.</h2><p>This prototype uses a T-Mobile-inspired design. T-Mobile has not approved or integrated it. The T-Life view is a concept of how the Protection Profile could appear there.</p></section>

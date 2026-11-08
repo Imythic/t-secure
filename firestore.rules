@@ -14,7 +14,37 @@ service cloud.firestore {
     function optionalBool(data, key) {
       return !(key in data) || data[key] is bool;
     }
-    // Preferences customize the experience. No psychological, health, or vulnerability fields exist.
+    function optionalList(data, key, allowed) {
+      return !(key in data) || (data[key] is list && data[key].size() <= allowed.size() && data[key].hasOnly(allowed));
+    }
+    function boundedNumber(value, min, max) {
+      return value is number && value >= min && value <= max;
+    }
+    // Voice check-in summary numbers only. Audio and words are never stored.
+    function validVoiceBaseline(v) {
+      return v is map
+        && v.keys().hasOnly(['recordedAt','durationSec','speechRatio','pausesPerMin','wordsPerMin','prompts'])
+        && v.recordedAt is timestamp
+        && boundedNumber(v.durationSec, 0, 120)
+        && boundedNumber(v.speechRatio, 0, 1)
+        && boundedNumber(v.pausesPerMin, 0, 200)
+        && (!('wordsPerMin' in v) || v.wordsPerMin == null || boundedNumber(v.wordsPerMin, 0, 400))
+        && v.prompts is list && v.prompts.size() <= 4 && v.prompts.hasOnly(['breakfast','grandchild','home','weekend']);
+    }
+    // Optional, self-reported risk profile. Owner-only, allowlisted values, no free text and no scores.
+    function validRiskProfile(r) {
+      return r is map
+        && r.keys().hasOnly(['relationshipStatus','hasGrandchildren','riskHistory','wellbeing','occupation','voiceBaseline','boostUntil','updatedAt'])
+        && optionalIn(r, 'relationshipStatus', ['married','partnered','single','widowed','divorced','prefer-not'])
+        && optionalBool(r, 'hasGrandchildren')
+        && optionalList(r, 'riskHistory', ['gambling','previous-scam','financial-stress'])
+        && optionalList(r, 'wellbeing', ['memory','mood','impulse','other'])
+        && optionalIn(r, 'occupation', ['retired','employee','business-owner','executive','finance-admin','student','other','prefer-not'])
+        && (!('voiceBaseline' in r) || validVoiceBaseline(r.voiceBaseline))
+        && (!('boostUntil' in r) || r.boostUntil is timestamp)
+        && (!('updatedAt' in r) || r.updatedAt is timestamp);
+    }
+    // Preferences customize the experience. Sensitive answers live only in the risk profile.
     function validPreferences(p) {
       return p is map
         && p.keys().hasOnly(['language','textSize','highContrast','reduceMotion','warningStyle','callAlertAudio','verificationMethods','hasFamilyPassphrase'])
@@ -29,7 +59,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, delete: if owner(uid);
       allow create, update: if owner(uid)
-        && request.resource.data.keys().hasOnly(['displayName','email','createdAt','updatedAt','onboardingCompleted','protectionEnabled','preferences','privacyAcknowledgedAt'])
+        && request.resource.data.keys().hasOnly(['displayName','email','createdAt','updatedAt','onboardingCompleted','protectionEnabled','preferences','privacyAcknowledgedAt','riskProfile'])
         && shortString(request.resource.data.get('displayName', ''), 80)
         && request.resource.data.get('email', request.auth.token.get('email', null)) == request.auth.token.get('email', null)
         && request.resource.data.get('onboardingCompleted', false) is bool
@@ -37,7 +67,8 @@ service cloud.firestore {
         && request.resource.data.get('createdAt', request.time) is timestamp
         && request.resource.data.get('updatedAt', request.time) is timestamp
         && request.resource.data.get('privacyAcknowledgedAt', request.time) is timestamp
-        && validPreferences(request.resource.data.get('preferences', {}));
+        && validPreferences(request.resource.data.get('preferences', {}))
+        && validRiskProfile(request.resource.data.get('riskProfile', {}));
     }
     // Optional people the customer may choose to call. Never contacted automatically.
     match /users/{uid}/trustedContacts/{contactId} {
