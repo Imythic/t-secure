@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 
+// The first run after a fresh install can take 20s+ on Windows while new files are scanned.
 test('Firebase functions boot and signing keys work without CommonJS require(ESM)',()=>{
   const script=`
     import assert from 'node:assert/strict';
@@ -32,6 +33,6 @@ test('Firebase functions boot and signing keys work without CommonJS require(ESM
     assert.equal(verify('RSA-SHA256',Buffer.from('tampered'),keys[0].getPublicKey(),signature),false);
     console.log('Function startup and RSA signing-key validation passed.');
   `;
-  const result=spawnSync(process.execPath,['--no-experimental-require-module','--input-type=module','-e',script],{cwd:process.cwd(),encoding:'utf8',timeout:20000});
+  const result=spawnSync(process.execPath,['--no-experimental-require-module','--input-type=module','-e',script],{cwd:process.cwd(),encoding:'utf8',timeout:90000});
   assert.equal(result.status,0,result.stderr||result.error?.message);
 });
