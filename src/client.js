@@ -146,11 +146,21 @@ export class Client {
     if(Date.now()<retryAt)throw Object.assign(new Error('This analysis is recovering. Standard warning checks are still available. Please try again shortly.'),{status:503,retryAfterMs:retryAt-Date.now()});
     const token=await user.getIdToken();
     const response=await fetch(path,{method,signal:signal||AbortSignal.timeout(35000),headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
-    const result=await response.json();
-    if(!response.ok){
-      const retryAfterMs=[429,503].includes(response.status)?Math.max(30000,Number(response.headers.get('Retry-After')||0)*1000):0;
+    let result;
+    try{result=await response.json();}catch{/* A gateway or failed function can return text or HTML. */}
+    const valid=result&&typeof result==='object'&&!Array.isArray(result);
+    if(!response.ok||!valid){
+      const status=response.ok?502:response.status;
+      const retryAfter=Number(response.headers.get('Retry-After')||0);
+      const retryAfterMs=[429,503].includes(status)?Math.max(30000,Number.isFinite(retryAfter)?retryAfter*1000:0):0;
       if(retryKey&&retryAfterMs)this.retryAt.set(retryKey,Date.now()+retryAfterMs);
-      throw Object.assign(new Error(result.error || 'Unable to complete this request.'),{status:response.status,retryAfterMs});
+      const message=!response.ok&&valid&&typeof result.error==='string'&&result.error.trim()&&result.error.length<=500
+        ?result.error
+        :response.ok?'The server returned an unexpected response. Please try again.'
+        :status===401?'Your session has expired. Please sign in again.'
+        :status===403?'This request is not available for your account.'
+        :'The server is temporarily unavailable. Please try again shortly.';
+      throw Object.assign(new Error(message),{status,retryAfterMs});
     }
     return result;
   }

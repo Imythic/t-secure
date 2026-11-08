@@ -120,6 +120,10 @@ See [validation notes](docs/VALIDATION.md) for completed checks and deployment l
 
 Patched dependency overrides address SDK advisories without downgrading Firebase. Keep package-lock.json, rerun tests when upgrading, and check npm audit.
 
+Firebase Admin 14.5.0 brings jwks-rsa 4.1.0, whose synchronous CommonJS imports of ESM-only jose 6 can crash Vercel functions with ERR_REQUIRE_ESM. scripts/patch-jwks-rsa.mjs replaces those two imports with asynchronous imports while retaining the installed versions and verification logic. Both postinstall and the build command apply this version-checked, idempotent patch, including when Vercel reuses dependency caches. Recheck the patch when upgrading jwks-rsa. The upstream compatibility issue is tracked at [auth0/node-jwks-rsa#507](https://github.com/auth0/node-jwks-rsa/issues/507).
+
+The runtime regression in npm test disables synchronous require(ESM), boots every API handler, checks unauthenticated rejection, and validates real RSA signing-key conversion and tampered-signature rejection. API response tests also cover platform text/HTML errors and malformed successful responses; users receive a readable service error instead of a JSON parser exception.
+
 ## Deploy to Vercel
 
 1. Sign in to Vercel CLI or import the repository in its dashboard.

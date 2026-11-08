@@ -6,9 +6,10 @@ Verified locally on November 7, 2026.
 
 | Check | Result |
 | --- | --- |
-| Core detection, scoring, consent, authentication guards, service behavior, call scheduling/alerts, audio lifecycle, and OpenRouter adapter | 42 tests passed |
+| Core detection, scoring, consent, authentication guards, service behavior, call scheduling/alerts, audio lifecycle, OpenRouter adapter, and restricted-ESM runtime startup | 43 tests passed |
 | Firestore security rules on demo-tsecure emulator | 8 tests passed |
 | Desktop, portrait mobile, and landscape Chrome interaction flows | 26 tests passed |
+| Plain-text/HTML platform crashes, malformed API responses, reviewed JSON errors, and valid profile responses | 4 new desktop/mobile regression tests passed |
 | Firebase Auth + Firestore integration | 4 tests passed |
 | Axe WCAG A/AA checks across 10 routes × 2 viewport sizes | 0 violations |
 | Call caution, high-risk dialog, and after-call states × 5 viewport sizes | 15 checks; 0 accessibility violations, browser errors, or horizontal overflow |
@@ -29,6 +30,12 @@ Desktop captures use 1440 × 1000; mobile captures use 390 × 844 and 320 × 740
 Toolchain: Node 24.13.0, Vite 8.3.6, Playwright 1.65.0 with installed Chrome, Firebase CLI 15.34.0, Java 26.0.2.1.
 
 ## Live-service fixes and verification
+
+The login error reported on t-secure-pi.vercel.app was reproduced publicly: unauthenticated requests to both /api/profile and /api/analyze returned HTTP 500 text/plain with FUNCTION_INVOCATION_FAILED before application authentication ran. Supplied Vercel logs identified ERR_REQUIRE_ESM in jwks-rsa's synchronous import of jose. A fresh local process with --no-experimental-require-module reproduced the same failure. The version-checked installation/build patch now loads jose asynchronously in both jwks-rsa entry paths, retaining current dependency versions. The restricted-loader regression boots all four API handlers, confirms HTTP 401 JSON for absent identity, converts an RSA JWK, accepts a genuine signature, and rejects a modified message.
+
+Client.api now catches non-JSON and malformed responses, preserves HTTP error status, rejects null/array responses, and displays a readable service message. It retains valid application JSON errors. The four new browser regression checks pass on desktop and mobile. Production still needs this source revision deployed before the public login failure can be considered resolved.
+
+An isolated npm ci without environment files applied the compatibility patch through postinstall, retained the locked dependency versions, and reported zero known vulnerabilities. Running the restricted-loader startup/RSA regression from that clean installation passed. Re-running the patch was a no-op verification. Production build and browser-secret isolation also passed.
 
 The original repeated 503s came from missing Firebase Admin configuration. The supplied Firebase service account and OpenRouter key are now stored in the ignored .env file. A read-only Firestore request and provider-key authorization both succeeded. No credentials are included in this report.
 
