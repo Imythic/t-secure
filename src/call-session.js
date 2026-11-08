@@ -1,0 +1,68 @@
+import { analyzeText, mergeAnalysis } from '../shared/detection.js';
+export class CallSession {
+  constructor({analyze,onChange,intervalMs=4500,minAnalysisMs=3000}) {
+    Object.assign(this,{analyze,onChange,intervalMs,minAnalysisMs});
+    this.generation=0; this.snapshot={status:'idle',turns:[],analysis:{risk:'low',reasons:[]}};
+  }
+  emit() { this.onChange({...this.snapshot,turns:[...this.snapshot.turns]}); }
+  start(scenario) {
+    this.end(false); this.generation++; this.scenario=scenario; this.index=0;
+    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},sequence:0,sessionId:null};
+    this.lastRequest=0; this.retryAt=0;this.busy=false; this.advance(); this.schedule();
+  }
+  schedule() {
+    clearTimeout(this.timer);
+    if (this.snapshot.status === 'playing') this.timer=setTimeout(()=>{this.advance();this.schedule();},this.intervalMs);
+  }
+  advance() {
+    if (this.index >= this.scenario.turns.length) {this.snapshot.status='completed';this.emit();return;}
+    const [speaker,text]=this.scenario.turns[this.index++];
+    this.snapshot.turns.push({speaker,text,id:this.index,timestamp:new Date().toISOString()});
+    this.snapshot.sequence++;
+    const context=this.snapshot.turns.map((turn)=>turn.speaker + ': ' + turn.text).join('\n');
+    this.snapshot.analysis={...mergeAnalysis(this.snapshot.analysis,analyzeText(context)),incomplete:this.snapshot.analysis.incomplete};
+    this.emit(); this.request();
+  }
+  async request() {
+    if (this.busy || !['playing','paused','completed'].includes(this.snapshot.status)) return;
+    if(Date.now()<this.retryAt)return;
+    const delay=this.minAnalysisMs - (Date.now()-this.lastRequest);
+    if (delay>0) {clearTimeout(this.pending);this.pending=setTimeout(()=>this.request(),delay);return;}
+    this.busy=true;this.lastRequest=Date.now();
+    const generation=this.generation, sequence=this.snapshot.sequence;
+    this.controller=new AbortController();
+    try {
+      const result=await this.analyze({
+        channel:'call',source:'simulation',sessionId:this.snapshot.sessionId,sequence,
+        text:this.snapshot.turns.map((t)=>t.speaker + ': ' + t.text).join('\n'),
+      },this.controller.signal);
+      if (generation !== this.generation) return;
+      this.snapshot.sessionId=result.sessionId || this.snapshot.sessionId;
+      if (sequence === this.snapshot.sequence) {
+        this.snapshot.analysis=mergeAnalysis(this.snapshot.analysis,result);
+        this.snapshot.analysis.incomplete=result.incomplete;
+        this.emit();
+      }
+    } catch (error) {
+      if (generation === this.generation && error.name !== 'AbortError') {
+        if([401,403].includes(error.status))this.retryAt=Infinity;
+        else this.retryAt=Date.now()+Math.max(this.minAnalysisMs,error.retryAfterMs||30000);
+        this.snapshot.analysis.incomplete=true;
+        if (this.snapshot.analysis.risk==='low') this.snapshot.analysis.risk='unknown';
+        this.emit();
+      }
+    } finally {
+      if (generation === this.generation) {
+        this.busy=false;
+        if (sequence < this.snapshot.sequence) this.request();
+      }
+    }
+  }
+  pause() {if(this.snapshot.status==='playing'){this.snapshot.status='paused';clearTimeout(this.timer);this.emit();}}
+  resume() {if(this.snapshot.status==='paused'){this.snapshot.status='playing';this.emit();this.schedule();}}
+  end(notify=true) {
+    this.generation++;clearTimeout(this.timer);clearTimeout(this.pending);this.controller?.abort();
+    this.snapshot={...this.snapshot,status:'ended'};this.busy=false;
+    if(notify)this.emit();
+  }
+}

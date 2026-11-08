@@ -1,1 +1,12 @@
 .env
+.env.*
+!.env.example
+node_modules/
+dist/
+.vercel/
+test-results/
+playwright-report/
+*-debug.log
+.firebase/
+.impeccable/cache/
+artifacts/

@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+    }
+    match /users/{uid}/settings/contact {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['name','relationship','phone'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+        && request.resource.data.relationship is string && request.resource.data.relationship.size() <= 60
+        && request.resource.data.phone is string
+        && request.resource.data.phone.matches('^[+0-9() .-]{7,30}$');
+    }
+    match /users/{uid}/private/{docId} {
+      allow read: if owner(uid) && docId in ['consent','assessment'];
+      allow write: if false;
+    }
+    match /users/{uid}/incidents/{incidentId} {
+      allow read, delete: if owner(uid);
+      allow update: if owner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recovery'])
+        && request.resource.data.recovery is list
+        && request.resource.data.recovery.size() <= 6
+        && request.resource.data.recovery.hasOnly(['stop','contact-bank','passwords','devices','report','trusted']);
+      allow create: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

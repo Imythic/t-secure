@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T23:37:26.494Z",
+  "title": "Design System: T-Secure",
+  "extensions": {
+    "colorMeta": {
+      "magenta": {
+        "role": "primary",
+        "displayName": "T-Secure Magenta",
+        "canonical": "#e20074",
+        "tonalRamp": [
+          "oklch(0.15 0.2386 1.3)",
+          "oklch(0.26 0.2386 1.3)",
+          "oklch(0.38 0.2386 1.3)",
+          "oklch(0.49 0.2386 1.3)",
+          "oklch(0.61 0.2386 1.3)",
+          "oklch(0.72 0.2386 1.3)",
+          "oklch(0.84 0.2386 1.3)",
+          "oklch(0.95 0.2386 1.3)"
+        ]
+      },
+      "magenta-dark": {
+        "role": "primary",
+        "displayName": "Deep Magenta",
+        "canonical": "#a80056",
+        "tonalRamp": [
+          "oklch(0.15 0.1916 0.7)",
+          "oklch(0.26 0.1916 0.7)",
+          "oklch(0.38 0.1916 0.7)",
+          "oklch(0.49 0.1916 0.7)",
+          "oklch(0.61 0.1916 0.7)",
+          "oklch(0.72 0.1916 0.7)",
+          "oklch(0.84 0.1916 0.7)",
+          "oklch(0.95 0.1916 0.7)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Rose-tinted Canvas",
+        "canonical": "#fcfafc",
+        "tonalRamp": [
+          "oklch(0.15 0.0034 325.6)",
+          "oklch(0.26 0.0034 325.6)",
+          "oklch(0.38 0.0034 325.6)",
+          "oklch(0.49 0.0034 325.6)",
+          "oklch(0.61 0.0034 325.6)",
+          "oklch(0.72 0.0034 325.6)",
+          "oklch(0.84 0.0034 325.6)",
+          "oklch(0.95 0.0034 325.6)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(0.15 0.0000 89.9)",
+          "oklch(0.26 0.0000 89.9)",
+          "oklch(0.38 0.0000 89.9)",
+          "oklch(0.49 0.0000 89.9)",
+          "oklch(0.61 0.0000 89.9)",
+          "oklch(0.72 0.0000 89.9)",
+          "oklch(0.84 0.0000 89.9)",
+          "oklch(0.95 0.0000 89.9)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Deep Plum Ink",
+        "canonical": "#342b35",
+        "tonalRamp": [
+          "oklch(0.15 0.0217 322.9)",
+          "oklch(0.26 0.0217 322.9)",
+          "oklch(0.38 0.0217 322.9)",
+          "oklch(0.49 0.0217 322.9)",
+          "oklch(0.61 0.0217 322.9)",
+          "oklch(0.72 0.0217 322.9)",
+          "oklch(0.84 0.0217 322.9)",
+          "oklch(0.95 0.0217 322.9)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Plum",
+        "canonical": "#766a76",
+        "tonalRamp": [
+          "oklch(0.15 0.0235 325.9)",
+          "oklch(0.26 0.0235 325.9)",
+          "oklch(0.38 0.0235 325.9)",
+          "oklch(0.49 0.0235 325.9)",
+          "oklch(0.61 0.0235 325.9)",
+          "oklch(0.72 0.0235 325.9)",
+          "oklch(0.84 0.0235 325.9)",
+          "oklch(0.95 0.0235 325.9)"
+        ]
+      },
+      "rose": {
+        "role": "neutral",
+        "displayName": "Pale Rose",
+        "canonical": "#fcebf4",
+        "tonalRamp": [
+          "oklch(0.15 0.0218 344.2)",
+          "oklch(0.26 0.0218 344.2)",
+          "oklch(0.38 0.0218 344.2)",
+          "oklch(0.49 0.0218 344.2)",
+          "oklch(0.61 0.0218 344.2)",
+          "oklch(0.72 0.0218 344.2)",
+          "oklch(0.84 0.0218 344.2)",
+          "oklch(0.95 0.0218 344.2)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Quiet Divider",
+        "canonical": "#ece5eb",
+        "tonalRamp": [
+          "oklch(0.15 0.0110 330.2)",
+          "oklch(0.26 0.0110 330.2)",
+          "oklch(0.38 0.0110 330.2)",
+          "oklch(0.49 0.0110 330.2)",
+          "oklch(0.61 0.0110 330.2)",
+          "oklch(0.72 0.0110 330.2)",
+          "oklch(0.84 0.0110 330.2)",
+          "oklch(0.95 0.0110 330.2)"
+        ]
+      },
+      "warning-surface": {
+        "role": "secondary",
+        "displayName": "Warning Paper",
+        "canonical": "#fff9ef",
+        "tonalRamp": [
+          "oklch(0.15 0.0147 80.7)",
+          "oklch(0.26 0.0147 80.7)",
+          "oklch(0.38 0.0147 80.7)",
+          "oklch(0.49 0.0147 80.7)",
+          "oklch(0.61 0.0147 80.7)",
+          "oklch(0.72 0.0147 80.7)",
+          "oklch(0.84 0.0147 80.7)",
+          "oklch(0.95 0.0147 80.7)"
+        ]
+      },
+      "warning-ink": {
+        "role": "secondary",
+        "displayName": "Amber Ink",
+        "canonical": "#895a1e",
+        "tonalRamp": [
+          "oklch(0.15 0.0961 68.5)",
+          "oklch(0.26 0.0961 68.5)",
+          "oklch(0.38 0.0961 68.5)",
+          "oklch(0.49 0.0961 68.5)",
+          "oklch(0.61 0.0961 68.5)",
+          "oklch(0.72 0.0961 68.5)",
+          "oklch(0.84 0.0961 68.5)",
+          "oklch(0.95 0.0961 68.5)"
+        ]
+      },
+      "unknown-surface": {
+        "role": "secondary",
+        "displayName": "Soft Lilac",
+        "canonical": "#f0eafa",
+        "tonalRamp": [
+          "oklch(0.15 0.0222 302.9)",
+          "oklch(0.26 0.0222 302.9)",
+          "oklch(0.38 0.0222 302.9)",
+          "oklch(0.49 0.0222 302.9)",
+          "oklch(0.61 0.0222 302.9)",
+          "oklch(0.72 0.0222 302.9)",
+          "oklch(0.84 0.0222 302.9)",
+          "oklch(0.95 0.0222 302.9)"
+        ]
+      },
+      "unknown-ink": {
+        "role": "secondary",
+        "displayName": "Unknown Plum",
+        "canonical": "#7a6092",
+        "tonalRamp": [
+          "oklch(0.15 0.0819 307.6)",
+          "oklch(0.26 0.0819 307.6)",
+          "oklch(0.38 0.0819 307.6)",
+          "oklch(0.49 0.0819 307.6)",
+          "oklch(0.61 0.0819 307.6)",
+          "oklch(0.72 0.0819 307.6)",
+          "oklch(0.84 0.0819 307.6)",
+          "oklch(0.95 0.0819 307.6)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Page heading",
+        "purpose": "Standard page headings; responsive home display variants are described in DESIGN.md."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Group and task headings."
+      },
+      "body": {
+        "displayName": "Essential reading",
+        "purpose": "Protective guidance, call transcript, assessment advice, and primary introductions."
+      },
+      "supporting": {
+        "displayName": "Supporting copy",
+        "purpose": "Secondary help and contextual descriptions."
+      },
+      "label": {
+        "displayName": "Controls and explanations",
+        "purpose": "Action links, sources, and coverage explanations."
+      }
+    },
+    "shadows": [
+      {
+        "name": "primary-hover",
+        "value": "0 4px 12px #a4004e17",
+        "purpose": "Primary-button hover response."
+      },
+      {
+        "name": "notification",
+        "value": "0 6px 25px #35252f24",
+        "purpose": "Transient notification overlay."
+      },
+      {
+        "name": "phone-preview",
+        "value": "0 12px 32px #7b2e5920",
+        "purpose": "Secondary illustrative interface preview."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-state",
+        "value": "background .15s, box-shadow .15s",
+        "purpose": "Button state transitions."
+      },
+      {
+        "name": "switch-state",
+        "value": "transform .18s",
+        "purpose": "Switch-thumb movement."
+      },
+      {
+        "name": "waveform",
+        "value": "voice 2s ease-in-out infinite alternate",
+        "purpose": "Decorative phone-preview waveform; disabled with reduced motion."
+      },
+      {
+        "name": "call-progress",
+        "value": "pulse 1.8s ease-out infinite",
+        "purpose": "In-progress call indicator; disabled with reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-min",
+        "value": "1600px"
+      },
+      {
+        "name": "compact-desktop-max",
+        "value": "1200px"
+      },
+      {
+        "name": "stacked-task-max",
+        "value": "1020px"
+      },
+      {
+        "name": "mobile-navigation-max",
+        "value": "760px"
+      },
+      {
+        "name": "narrow-max",
+        "value": "440px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main deliberate action.",
+      "html": "<button class=\"ds-button ds-primary\">Try a practice call</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;padding:12px 20px;border:1px solid transparent;border-radius:9px;font:750 16px/1.4 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);cursor:pointer;transition:background .15s,box-shadow .15s}.ds-button:focus-visible{outline:3px solid var(--magenta,#e20074);outline-offset:4px;}.ds-button:disabled{opacity:.55;cursor:not-allowed}.ds-primary{background:var(--magenta,#e20074);color:white}.ds-primary:hover{background:var(--magenta-dark,#a80056);box-shadow:0 4px 12px #a4004e17}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Independent verification and supporting actions.",
+      "html": "<button class=\"ds-button ds-secondary\">Add a trusted contact</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;padding:12px 20px;border:1px solid transparent;border-radius:9px;font:750 16px/1.4 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);cursor:pointer;transition:background .15s,box-shadow .15s}.ds-button:focus-visible{outline:3px solid var(--magenta,#e20074);outline-offset:4px;}.ds-button:disabled{opacity:.55;cursor:not-allowed}.ds-secondary{background:white;border-color:#ded6dc;color:#4e3b4b}.ds-secondary:hover{background:#faf5f8;border-color:#c6b6c1}"
+    },
+    {
+      "name": "End Call Button",
+      "kind": "button",
+      "description": "A clear action to stop a simulated call.",
+      "html": "<button class=\"ds-button ds-danger\">End demo call</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;padding:12px 20px;border:1px solid transparent;border-radius:9px;font:750 16px/1.4 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);cursor:pointer;transition:background .15s,box-shadow .15s}.ds-button:focus-visible{outline:3px solid var(--magenta,#e20074);outline-offset:4px;}.ds-button:disabled{opacity:.55;cursor:not-allowed}.ds-danger{background:#b32636;color:white}.ds-danger:hover{background:#961d2c}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "A visible label and comfortable text field.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-contact\">Contact name</label><input class=\"ds-field\" id=\"ds-contact\" placeholder=\"e.g. Jordan\">",
+      "css": ".ds-field-label{display:block;font:700 15px/1.55 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);color:var(--ink,#342b35);margin-bottom:8px}.ds-field{width:100%;min-height:52px;border:1px solid #d8cfd6;border-radius:8px;background:white;padding:12px 14px;color:var(--ink,#342b35);font:16px/1.5 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);box-sizing:border-box}.ds-field:hover{border-color:#c6b6c1}.ds-field:focus-visible{border-color:var(--magenta,#e20074);outline:2px solid #e2007422;outline-offset:1px}.ds-field::placeholder{color:#82747f;opacity:1}"
+    },
+    {
+      "name": "Selected Navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "An explicit selected task with a consistent SVG icon.",
+      "html": "<a class=\"ds-nav\" href=\"#/calls\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7 3H4a1 1 0 0 0-1 1c0 9 8 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a15 15 0 0 1-7-7l2-2Z\"/></svg>Call protection<span></span></a>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:13px;min-height:54px;padding:12px 16px;border-radius:10px;background:var(--rose,#fcebf4);color:var(--magenta-dark,#a80056);font:800 16px/1.55 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);text-decoration:none}.ds-nav svg{width:21px;height:21px}.ds-nav>span{width:6px;height:6px;margin-left:auto;border-radius:50%;background:var(--magenta,#e20074)}.ds-nav:hover{background:#f7f3f6}.ds-nav:focus-visible{outline:3px solid var(--magenta,#e20074);outline-offset:4px;}"
+    },
+    {
+      "name": "Risk Badge",
+      "kind": "chip",
+      "description": "Written state plus icon; never color alone.",
+      "html": "<span class=\"ds-risk\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 3 10 18H2Z M12 9v5 M12 17h.01\"/></svg>High-risk warning</span>",
+      "css": ".ds-risk{display:inline-flex;align-items:center;gap:7px;font:700 11px/1.55 var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);background:#fff0d6;color:#895a1e;border-radius:5px;padding:6px 9px}.ds-risk svg{width:13px;height:13px}"
+    },
+    {
+      "name": "Work Surface",
+      "kind": "card",
+      "refersTo": "surface",
+      "description": "A quiet bounded form or account work area.",
+      "html": "<section class=\"ds-surface\"><h2>Your trusted contact</h2><p>A person you can call to get a second opinion.</p></section>",
+      "css": ".ds-surface{padding:28px;background:white;border:1px solid var(--line,#ece5eb);border-radius:14px;color:var(--ink,#342b35);font-family:var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif)}.ds-surface h2{font-size:22px;line-height:1.2;font-weight:750;margin:0 0 12px;letter-spacing:-.025em}.ds-surface p{font-size:17px;line-height:1.8;color:var(--muted,#766a76);margin:0}"
+    },
+    {
+      "name": "Warning Explanation",
+      "kind": "custom",
+      "description": "Grounded warning copy and a distinct source label.",
+      "html": "<section class=\"ds-warning\"><h2>High-risk warning</h2><p>This request has serious warning signs. Pause before sharing information or sending money.</p><small>Independent rule checks · Local demo</small></section>",
+      "css": ".ds-warning{padding:27px;background:#fff9ef;border:1px solid #f0d8b4;border-radius:14px;font-family:var(--font,\"Manrope Variable\",\"Segoe UI\",sans-serif);color:var(--ink,#342b35)}.ds-warning h2{font-size:23px;font-weight:750;line-height:1.2;letter-spacing:-.025em;margin:0 0 12px}.ds-warning p{font-size:20px;line-height:1.8;color:var(--muted,#766a76);margin:0}.ds-warning small{display:block;color:#70616d;font-size:14px;line-height:1.7;margin-top:22px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A calm community-service guide",
+    "overview": "T-Secure uses familiar web controls, generous reading space, and a reassuring voice. Its pale rose surfaces and magenta actions retain the T-Mobile association without turning a protection task into an alarm-heavy dashboard.\n\nThe system is primarily flat. Clear headings, readable guidance, and grounded evidence lead; decorative interface geometry stays secondary. Simulation labels and analysis-source explanations are part of the visible interface.",
+    "keyCharacteristics": [
+      "Clear task hierarchy and familiar controls.",
+      "Large essential reading text at every breakpoint.",
+      "White and rose surfaces with a purposeful magenta accent.",
+      "Written risk labels, evidence, and verification actions together.",
+      "Explicit distinctions between demonstrations and connected analysis."
+    ],
+    "rules": [
+      {
+        "name": "The Written Warning Rule",
+        "body": "State colors accompany explicit labels, explanations, and evidence; they never carry risk meaning alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reading Size Rule",
+        "body": "Essential protective guidance remains 20px at every breakpoint; shorten or reflow content before reducing its reading size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Room to Read Rule",
+        "body": "Preserve reading space by stacking panels and wrapping action rows; do not compress the essential copy.",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "Do keep essential protective guidance at 20px across breakpoints.",
+      "Do keep primary controls at least 48px in their active target area.",
+      "Do pair warnings with written reasons, source labels, and verification actions.",
+      "Do retain visible sample-data and concept labels beside demo results.",
+      "Do use the shared inline SVG icon vocabulary and visible focus treatment."
+    ],
+    "donts": [
+      "Don't use color alone to communicate risk.",
+      "Don't make a sample score look like a verified prediction about the real user.",
+      "Don't replace an insufficient-information state with zero.",
+      "Don't reduce essential reading text to fit a narrow layout.",
+      "Don't promote decorative preview geometry into the primary task."
+    ]
+  }
+}
