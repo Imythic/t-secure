@@ -23,14 +23,14 @@ const SIGNALS = [
   ['authority', 'medium', /^\s*(?:your )?bank(?: security| alert| fraud alert)?:|\b(?:bank|card) (?:security|fraud) alert\b|\byour bank account\b/i, 'bank'],
   ['authority', 'medium', /\b(?:delivery|package|parcel|shipment) (?:is )?(?:on hold|could not be delivered|is pending|was returned)|\b(?:USPS|UPS|FedEx|DHL)\b/i, 'delivery'],
   ['fear', 'high', /\b(?:warrant for your arrest|arrest(?:ed)?|jail|hospital|accident)\b/i],
-  ['fear', 'medium', /\bin (?:big |serious )?trouble\b|unusual activity|suspicious activity|unauthori[sz]ed (?:transfer|charge|purchase|payment|login|sign.in)|(?:will be|is) (?:frozen|locked|suspended)|detected a (?:problem|virus|issue)|\bhacked\b/i],
+  ['fear', 'medium', /\bin (?:big |serious )?trouble\b|unusual activity|suspicious activity|unauthori[sz]ed (?:transfer|charge|purchase|payment|login|sign.in)|(?:will be|is|has been) (?:frozen|locked|suspended)|detected a (?:problem|virus|issue)|\bhacked\b/i],
   ['urgency', 'high', /within (?:\d+|one|two|five|ten|fifteen|thirty) (?:minutes|hours)|act now|before it(?:’|')?s too late/i],
   ['urgency', 'medium', /\b(?:it is an|it’s an|it's an) emergency\b|\bright away\b|\bimmediately\b|\b(?:verify|confirm|pay|respond|reply) (?:now|today)\b/i],
   ['urgency', 'low', /\bnow\b(?=\s*[.!,]|\s*$)/i],
   ['secrecy', 'high', /(?:do not|don’t|don't|must not) tell (?:anyone|anybody|mom|dad|grandma|grandpa|my (?:parents|mom|dad)|your (?:family|parents|bank|kids|children))|keep (?:this|it) (?:a )?secret|between (?:you and me|us)\b/i],
   ['isolation', 'high', /(?:do not|don’t|don't) (?:call|contact|tell|talk to) (?:my|your) (?:parents|family|bank|kids|children|son|daughter)|before they find out|(?:do not|don’t|don't) hang up|stay on the line/i],
   ['verification', 'medium', /my (?:phone|cell) (?:broke|is broken|died)|(?:lost|broke) my phone|this is my new number|from a (?:friend’s|friend's|friends|different|new) (?:number|phone)|you can(?:not|’t|'t) call me back|no time to (?:check|verify|call)|(?:only )?reply (?:only )?(?:to this (?:number|message)|here)/i],
-  ['financial', 'high', /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|money|bitcoin|crypto\w*|savings|funds|\$\d+)|\bneed \$\d[\d,]*|(?:settle|pay) (?:your|the|this) (?:debt|fee|fine|invoice)|\bpay (?:a |the )?(?:small |outstanding |redelivery )?(?:fee|fine|toll|balance)/i],
+  ['financial', 'high', /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|money|bitcoin|crypto\w*|savings|funds|\$\d+)|\bneed \$\d[\d,]*|\bneed (?:some |the )?money\b|(?:settle|pay) (?:your|the|this) (?:debt|fee|fine|invoice)|\bpay (?:a |the )?(?:small |outstanding |redelivery )?(?:fee|fine|toll|balance)/i],
 ];
 
 // Harmful next actions. Once requested, a prediction is marked as confirmed.
@@ -38,8 +38,8 @@ export const NEXT_ACTIONS = Object.freeze({
   payment: {label: 'Send or move money', pattern: /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|bitcoin|crypto\w*|money|savings|funds)|safe account|pay with|\bneed \$\d[\d,]*/i},
   credentials: {label: 'Share a verification code or password', pattern: /(?:read|send|share|tell|give|confirm|reply with|enter)\b.{0,35}(?:password|verification code|security code|one.time (?:code|password)|\bpin\b|\d.digit code)/i},
   remote: {label: 'Install remote-access software', pattern: /(?:install|download|enable|allow)\b.{0,40}(?:anydesk|teamviewer|remote (?:access|control)|screen.sharing)/i},
-  link: {label: 'Open a link', pattern: /(?:click|tap|open)\b.{0,25}(?:link|website)|https?:\/\/[^\s<>"']+/i},
-  personal: {label: 'Reveal personal information', pattern: /social security number|date of birth|account number|card (?:number|details)|mother(?:’|')?s maiden name/i},
+  link: {label: 'Open a link', pattern: /(?:click|tap|open)\b.{0,25}(?:link|website)|\b(?:using|via|through|at) (?:this|the following) link\b|https?:\/\/[^\s<>"']+/i},
+  personal: {label: 'Reveal personal information', pattern: /(?:verify|confirm|update) your (?:identity|personal (?:information|details)|account (?:information|details))|social security number|date of birth|account number|card (?:number|details)|mother(?:’|')?s maiden name/i},
 });
 
 const PATTERNS = {
@@ -54,6 +54,10 @@ const PATTERNS = {
 };
 
 const PROTECTIVE = new Set(['secrecy', 'isolation', 'verification']);
+// Relationship claims are common in genuine calls; they need leverage (money, secrecy, a request) to escalate.
+const RELATIONAL = new Set(['family', 'romance']);
+// A caller who invites independent verification is the opposite of a scam script.
+const REASSURANCE = /call (?:me|us) back on (?:my|our|the) (?:usual |regular |normal |own |saved )?(?:number|phone|cell)|call the number on (?:the back of your card|your (?:card|statement|bill|label|prescription label|appointment card))|you (?:don’t|don't|do not) need to (?:send|pay) (?:anything|any money)/i;
 const NEGATION = /(?:never|do not|don't|don’t|will not|won't|not to|should not|refuse to)\s+(?:ever\s+)?$/i;
 const STRENGTH_LABELS = {possible: 'Possible', likely: 'Likely', strong: 'Strongly indicated'};
 const LEVELS = ['low', 'caution', 'high'];
@@ -78,8 +82,10 @@ export function analyzeConversation(turns = []) {
   const kinds = new Map();
   const seen = new Set();
   const first = turns[0];
+  let reassured = false;
   turns.forEach((turn, index) => {
     if (turn.speaker !== 'contact' || typeof turn.text !== 'string') return;
+    if (matchOutside(REASSURANCE, turn.text)) reassured = true;
     for (const [tactic, confidence, pattern, kind] of SIGNALS) {
       const match = matchOutside(pattern, turn.text);
       if (!match) continue;
@@ -102,6 +108,7 @@ export function analyzeConversation(turns = []) {
     || (requests.some((r) => r.code === 'credentials') && findings.length ? 'credentials' : null)
     || (pressure.length >= 2 ? 'generic' : null);
 
+  const leverage = tactics.has('financial') || pressure.some((t) => PROTECTIVE.has(t)) || requests.length > 0;
   let prediction = null;
   if (anchor) {
     const pattern = PATTERNS[anchor];
@@ -109,8 +116,10 @@ export function analyzeConversation(turns = []) {
     const protectiveBlocked = supporting.some((t) => PROTECTIVE.has(t));
     const strength = anchor === 'generic'
       ? (protectiveBlocked && supporting.length >= 3 ? 'strong' : supporting.length >= 2 ? 'likely' : 'possible')
-      : supporting.length >= 2 && (protectiveBlocked || (tactics.has('fear') && tactics.has('urgency'))) ? 'strong'
-        : supporting.length >= 1 ? 'likely' : 'possible';
+      : RELATIONAL.has(anchor)
+        ? (protectiveBlocked && supporting.length >= 2 ? 'strong' : leverage && supporting.length >= 1 ? 'likely' : 'possible')
+        : supporting.length >= 2 && (protectiveBlocked || (tactics.has('fear') && tactics.has('urgency'))) ? 'strong'
+          : supporting.length >= 1 ? 'likely' : 'possible';
     const confirmed = requests.find((r) => pattern.next.includes(r.code)) || null;
     const evidence = [...new Map(findings.map((f) => [f.tactic, f])).values()].slice(0, 4);
     prediction = {
@@ -127,11 +136,26 @@ export function analyzeConversation(turns = []) {
   // A link or a single request with no surrounding pressure is never enough for a high warning.
   const severe = requests.some((r) => ['payment', 'credentials', 'remote'].includes(r.code));
   const softer = requests.some((r) => ['link', 'personal'].includes(r.code));
+  // Emotion and urgency without leverage stay quiet when the caller is a claimed relative
+  // or invites independent verification. Genuine emergencies sound urgent too.
+  const calmContext = !leverage && (reassured || RELATIONAL.has(anchor));
   let level = 'low';
   if (prediction?.strength === 'strong' || (severe && findings.length) || (softer && findings.length >= 2)) level = 'high';
-  else if (prediction?.strength === 'likely' || pressure.length >= 2 || severe || (softer && findings.length)) level = 'caution';
+  else if (prediction?.strength === 'likely' || (pressure.length >= 2 && !calmContext) || severe || (softer && findings.length)) level = 'caution';
 
-  return {level, findings, requests, prediction, orgs: [...kinds.keys()]};
+  return {level, score: riskScore(level, findings, requests, prediction), findings, requests, prediction, orgs: [...kinds.keys()], reassured};
+}
+
+// Evidence score (0–100) for display and sorting. Each level owns a fixed band, so the
+// number can never contradict the level, and it grows only with quoted evidence. It stops
+// at 95 because no score here is certainty.
+// It is not a probability of fraud and has not been calibrated against real-world data.
+export const SCORE_BANDS = Object.freeze({low: [0, 29], unknown: [0, 29], caution: [30, 69], high: [70, 95]});
+export function riskScore(level = 'low', findings = [], requests = [], prediction = null) {
+  const [min, max] = SCORE_BANDS[level] || SCORE_BANDS.low;
+  const tactics = new Set(findings.map((f) => f.tactic)).size;
+  const evidence = tactics * 4 + requests.length * 5 + ({possible: 1, likely: 4, strong: 6}[prediction?.strength] || 0);
+  return Math.min(max, min + evidence);
 }
 
 export function maxLevel(a = 'low', b = 'low') {
@@ -144,6 +168,9 @@ export function turnsFromText(text = '') {
   if (!lines.some((line) => /^(contact|user): /.test(line))) return [{speaker: 'contact', text}];
   return lines.filter((line) => /^(contact|user): /.test(line)).map((line) => ({speaker: line.startsWith('contact') ? 'contact' : 'user', text: line.replace(/^(contact|user): /, '')}));
 }
+
+// Only the other party's words are evidence. Customer replies are never scanned for warnings.
+export const contactText = (text = '') => turnsFromText(text).filter((t) => t.speaker === 'contact').map((t) => t.text).join('\n');
 
 // A model can raise a deterministic rating by at most one level, so an LLM response
 // alone never decides the final risk.

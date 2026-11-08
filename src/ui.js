@@ -51,5 +51,5 @@ export function highlight(text,reasons=[]) {
   return output+h(text.slice(end));
 }
 export function contactAction(contact) {
-  return contact ? `<a class="button secondary" href="tel:${h(contact.phone.replace(/[^+\d]/g,''))}">${icon('phone')}Call ${h(contact.name)}</a>` : `<a class="button secondary" href="#/settings">${icon('plus')}Add a trusted contact</a>`;
+  return contact ? `<a class="button secondary" href="tel:${h(contact.phone.replace(/[^+\d]/g,''))}">${icon('phone')}Call ${h(contact.displayName||contact.name)}</a>` : `<a class="button secondary" href="#/settings#trusted-contacts">${icon('plus')}Add a trusted contact</a>`;
 }

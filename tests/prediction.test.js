@@ -11,7 +11,7 @@ function firstTurn(turns,check){
 }
 
 test('scam scenarios are predicted before the harmful request is made',()=>{
-  for(const id of ['family','bank','government','support']){
+  for(const id of ['family','grandchild','bank','government','support']){
     const turns=turnsOf(id);
     const predicted=firstTurn(turns,r=>r.prediction&&r.prediction.strength!=='possible');
     const requested=firstTurn(turns,r=>r.prediction?.confirmed);
@@ -20,7 +20,7 @@ test('scam scenarios are predicted before the harmful request is made',()=>{
   }
 });
 test('family emergency escalates to high before any money request',()=>{
-  const turns=turnsOf('family').slice(0,3);
+  const turns=turnsOf('grandchild').slice(0,3);
   const result=analyzeConversation(turns);
   assert.equal(result.level,'high');
   assert.equal(result.requests.length,0);
@@ -46,7 +46,7 @@ test('ordinary conversations, single urgency words, and user replies stay quiet'
 test('a predictive high warning pauses the call once and records when it was predicted',t=>{
   const session=new CallSession({analyze:async()=>({risk:'low',reasons:[]}),onChange:()=>{},intervalMs:60000,minAnalysisMs:60000});
   t.after(()=>session.end(false));
-  session.start(scenarios.find(s=>s.id==='family'));
+  session.start(scenarios.find(s=>s.id==='grandchild'));
   assert.equal(session.snapshot.alert?.risk,'caution');
   assert.equal(session.snapshot.status,'playing');
   assert.equal(session.snapshot.predictedAt.turn,1);

@@ -74,7 +74,7 @@ test('unrelated communications: different scams without shared evidence are not 
 });
 test('an AI response alone cannot make an ordinary message high risk',async()=>{
   const text='See you at lunch tomorrow at noon.';
-  const service=createService({store:memoryStore(),model:async()=>({risk:'high',reasons:[{code:'urgency',evidence:'lunch tomorrow'}]})});
+  const service=createService({store:memoryStore(),model:async()=>({risk_level:'high',detected_tactics:[{name:'urgency',evidence:'lunch tomorrow',confidence:0.9}]})});
   const result=await service.analyze('u',{channel:'message',sequence:1,text});
   assert.equal(result.risk,'caution');
 });
