@@ -74,6 +74,10 @@ export const messageSamples = [
   {name:'Delivery text',sender:'+1 (555) 016-3318',text:'Your delivery is on hold. Pay a small fee within ten minutes: https://delivery.example@192.0.2.1/pay'},
   {name:'Bank code request',sender:'+1 (555) 014-7731',text:'Bank Security: Your account is suspended. Send your verification code to restore access.'},
   {name:'Bank link, new sender',sender:'+1 (555) 014-9902',text:'Bank Security: Your account is suspended. Verify now at https://secure-bank-verify.example/login to restore access.'},
+  {name:'Family emergency text',sender:'+1 (555) 019-8804',text:'Mom, it’s me. I lost my phone and this is my new number. I’m in trouble and need $500 for a lawyer right away. Please don’t tell Dad.'},
+  {name:'One-time code request',sender:'+1 (555) 014-6650',text:'We stopped an unauthorized transfer from your account. Reply with the 6-digit code we just sent you to cancel it.'},
   {name:'Romance pressure',sender:'+1 (555) 018-2207',text:'My love, we have never met but you are all I have. Send gift cards for my emergency and do not tell anyone.'},
+  {name:'Urgent but genuine',sender:'Pharmacy',text:'Reminder: your prescription is ready and will be returned to stock if not picked up by 6pm today. Questions? Call the number on your prescription label.'},
+  {name:'Vague message',sender:'+1 (555) 017-5521',text:'Hey, it has been a while! Is this still your number?'},
   {name:'An ordinary message',sender:'Dental office',text:'Hi! Your appointment is tomorrow at 2pm. Please call the number on your appointment card if you need to reschedule.'},
 ];

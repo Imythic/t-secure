@@ -92,7 +92,7 @@ const session=new CallSession({
     if(active&&route().name==='calls'&&snapshot.alert&&snapshot.alert.id!==lastCallAlertId){
       lastCallAlertId=snapshot.alert.id;
       const announcement=document.querySelector('#call-announcement');
-      if(announcement)announcement.textContent=snapshot.alert.risk==='high'?'High-risk warning. The practice call is paused. Verify the caller independently.':'Caution. Pressure or urgency deserves a second look.';
+      if(announcement)announcement.textContent=snapshot.alert.risk==='high'?'High risk. The practice call is paused. Verify the caller independently.':'Elevated risk. Pressure or urgency deserves a second look.';
       if(snapshot.alert.risk==='high')openCallWarning();
       callAudio.play(snapshot.alert.risk);
     }

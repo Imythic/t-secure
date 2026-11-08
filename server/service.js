@@ -33,14 +33,17 @@ export function createService({store, model, modelName = configuredModel}) {
       // Persist only codes and derived state, never raw text, excerpts, or model prose.
       // Network indicators are derived (domains, sender, codes, hashed wording) and kept only for warnings.
       const indicators = indicatorsToStore(extractIndicators({text:input.text,sender:input.sender}), result.risk);
-      await store.saveIncident(uid, sessionId, {
+      // A failed history write must not hide a completed safety check from the customer.
+      let saved = true;
+      try { await store.saveIncident(uid, sessionId, {
         ...(indicators ? {indicators} : {}),
         channel:input.channel, source:input.source, sequence:input.sequence, risk:result.risk,
         reasonCodes:[...new Set(result.reasons.map((r) => r.code))],
         createdAt:previous?.createdAt || new Date().toISOString(), updatedAt:new Date().toISOString(),
         recovery:previous?.recovery || [],
-      });
-      return {...result,sessionId,sequence:input.sequence,incomplete};
+      }); } catch { saved = false; }
+      // Without a saved record, a follow-up turn must start a new session rather than reference a missing one.
+      return {...result,sessionId:saved ? sessionId : input.sessionId,sequence:input.sequence,incomplete,saved};
     },
     async setConsent(uid, body) {
       if (typeof body?.enabled !== 'boolean' || !historySets.some((h) => h.id === body.historySetId)) throw httpError(400,'Choose a sample history and consent preference.');

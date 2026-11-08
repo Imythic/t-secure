@@ -661,3 +661,19 @@ label.switch-target{display:flex;align-items:center;justify-content:center;min-w
 .network-chip>.icon{width:13px;height:13px}
 @media(max-width:1020px){.insight-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.network-panel{padding:18px}.network-shared li{grid-template-columns:1fr}.network-shared span{text-align:left}}
+
+/* Shared risk presentation for calls and messages: larger, higher-contrast text */
+.analysis-panel h2{font-size:28px;margin:4px 0 10px}
+.analysis-panel>p{font-size:17px;color:var(--ink);line-height:1.7}
+.analysis-panel .assessment-eyebrow{margin-top:16px}
+.reason-list strong{font-size:15px}
+.reason-list blockquote{font-size:15px;color:#7a5a26}
+.analysis-source{font-size:13px;color:#776767}
+.small-chip,.call-person .small-chip{font-size:12px}
+.risk-badge{font-size:13px}
+.confidence{font-size:13px}
+.timeline-meta{font-size:14px}
+.likelihood{font-size:14px}
+.prediction-uncertainty{font-size:14px}
+.network-shared small{font-size:14px}
+.call-live-alert strong{display:block}

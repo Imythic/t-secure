@@ -23,20 +23,20 @@ const SIGNALS = [
   ['authority', 'medium', /^\s*(?:your )?bank(?: security| alert| fraud alert)?:|\b(?:bank|card) (?:security|fraud) alert\b|\byour bank account\b/i, 'bank'],
   ['authority', 'medium', /\b(?:delivery|package|parcel|shipment) (?:is )?(?:on hold|could not be delivered|is pending|was returned)|\b(?:USPS|UPS|FedEx|DHL)\b/i, 'delivery'],
   ['fear', 'high', /\b(?:warrant for your arrest|arrest(?:ed)?|jail|hospital|accident)\b/i],
-  ['fear', 'medium', /\bin (?:big |serious )?trouble\b|unusual activity|suspicious activity|(?:will be|is) (?:frozen|locked|suspended)|detected a (?:problem|virus|issue)|\bhacked\b/i],
+  ['fear', 'medium', /\bin (?:big |serious )?trouble\b|unusual activity|suspicious activity|unauthori[sz]ed (?:transfer|charge|purchase|payment|login|sign.in)|(?:will be|is) (?:frozen|locked|suspended)|detected a (?:problem|virus|issue)|\bhacked\b/i],
   ['urgency', 'high', /within (?:\d+|one|two|five|ten|fifteen|thirty) (?:minutes|hours)|act now|before it(?:’|')?s too late/i],
   ['urgency', 'medium', /\b(?:it is an|it’s an|it's an) emergency\b|\bright away\b|\bimmediately\b|\b(?:verify|confirm|pay|respond|reply) (?:now|today)\b/i],
   ['urgency', 'low', /\bnow\b(?=\s*[.!,]|\s*$)/i],
-  ['secrecy', 'high', /(?:do not|don’t|don't|must not) tell (?:anyone|anybody|your (?:family|parents|bank|kids|children))|keep (?:this|it) (?:a )?secret|between (?:you and me|us)\b/i],
+  ['secrecy', 'high', /(?:do not|don’t|don't|must not) tell (?:anyone|anybody|mom|dad|grandma|grandpa|my (?:parents|mom|dad)|your (?:family|parents|bank|kids|children))|keep (?:this|it) (?:a )?secret|between (?:you and me|us)\b/i],
   ['isolation', 'high', /(?:do not|don’t|don't) (?:call|contact|tell|talk to) (?:my|your) (?:parents|family|bank|kids|children|son|daughter)|before they find out|(?:do not|don’t|don't) hang up|stay on the line/i],
-  ['verification', 'medium', /my (?:phone|cell) (?:broke|is broken|died)|from a (?:friend’s|friend's|friends|different|new) (?:number|phone)|you can(?:not|’t|'t) call me back|no time to (?:check|verify|call)|(?:only )?reply (?:only )?(?:to this (?:number|message)|here)/i],
-  ['financial', 'high', /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|money|bitcoin|crypto\w*|savings|funds|\$\d+)|(?:settle|pay) (?:your|the|this) (?:debt|fee|fine|invoice)|\bpay (?:a |the )?(?:small |outstanding |redelivery )?(?:fee|fine|toll|balance)/i],
+  ['verification', 'medium', /my (?:phone|cell) (?:broke|is broken|died)|(?:lost|broke) my phone|this is my new number|from a (?:friend’s|friend's|friends|different|new) (?:number|phone)|you can(?:not|’t|'t) call me back|no time to (?:check|verify|call)|(?:only )?reply (?:only )?(?:to this (?:number|message)|here)/i],
+  ['financial', 'high', /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|money|bitcoin|crypto\w*|savings|funds|\$\d+)|\bneed \$\d[\d,]*|(?:settle|pay) (?:your|the|this) (?:debt|fee|fine|invoice)|\bpay (?:a |the )?(?:small |outstanding |redelivery )?(?:fee|fine|toll|balance)/i],
 ];
 
 // Harmful next actions. Once requested, a prediction is marked as confirmed.
 export const NEXT_ACTIONS = Object.freeze({
-  payment: {label: 'Send or move money', pattern: /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|bitcoin|crypto\w*|money|savings|funds)|safe account|pay with/i},
-  credentials: {label: 'Share a verification code or password', pattern: /(?:read|send|share|tell|give|confirm)\b.{0,35}(?:password|verification code|security code|one.time (?:code|password)|\bpin\b)/i},
+  payment: {label: 'Send or move money', pattern: /(?:buy|purchase|send|pay|transfer|wire|move)\b.{0,30}(?:gift cards?|bitcoin|crypto\w*|money|savings|funds)|safe account|pay with|\bneed \$\d[\d,]*/i},
+  credentials: {label: 'Share a verification code or password', pattern: /(?:read|send|share|tell|give|confirm|reply with|enter)\b.{0,35}(?:password|verification code|security code|one.time (?:code|password)|\bpin\b|\d.digit code)/i},
   remote: {label: 'Install remote-access software', pattern: /(?:install|download|enable|allow)\b.{0,40}(?:anydesk|teamviewer|remote (?:access|control)|screen.sharing)/i},
   link: {label: 'Open a link', pattern: /(?:click|tap|open)\b.{0,25}(?:link|website)|https?:\/\/[^\s<>"']+/i},
   personal: {label: 'Reveal personal information', pattern: /social security number|date of birth|account number|card (?:number|details)|mother(?:’|')?s maiden name/i},
@@ -49,6 +49,7 @@ const PATTERNS = {
   government: {name: 'Government impostor pattern', next: ['payment'], prediction: 'Demand immediate payment in gift cards, crypto, or a wire transfer', followUp: 'Raise the amount or the threat', advice: 'Government agencies send written notices and never demand gift cards or crypto. Look up the agency’s official number yourself.'},
   support: {name: 'Tech-support pattern', next: ['remote'], prediction: 'Ask you to install remote-access software', followUp: 'Ask for your password or a payment for the “repair”', advice: 'Don’t install anything. Real support companies don’t make unexpected calls about your computer.'},
   delivery: {name: 'Delivery fee pattern', next: ['link', 'payment'], prediction: 'Send you to a fake payment page to collect card details', followUp: 'Ask for your card number or charge more “fees”', advice: 'Don’t use the link. Check the tracking number in the carrier’s official app, or on its website typed in yourself.'},
+  credentials: {name: 'Verification code theft pattern', next: ['credentials'], prediction: 'Ask you for a verification code', followUp: 'Use the code to sign in to your account or approve a transfer', advice: 'Never share a code you didn’t request. Contact the company through its official app or the number on your card.'},
   generic: {name: 'Pressure pattern', next: ['payment', 'credentials', 'personal'], prediction: 'Ask for money, a code, or personal information', followUp: 'Escalate the pressure or ask for more', advice: 'Pause the conversation and verify independently using a number you already know.'},
 };
 
@@ -97,7 +98,9 @@ export function analyzeConversation(turns = []) {
 
   const tactics = new Set(findings.map((f) => f.tactic));
   const pressure = ['fear', 'urgency', 'secrecy', 'isolation', 'verification', 'financial'].filter((t) => tactics.has(t));
-  const anchor = [...kinds.entries()].sort((a, b) => a[1] - b[1])[0]?.[0] || (pressure.length >= 2 ? 'generic' : null);
+  const anchor = [...kinds.entries()].sort((a, b) => a[1] - b[1])[0]?.[0]
+    || (requests.some((r) => r.code === 'credentials') && findings.length ? 'credentials' : null)
+    || (pressure.length >= 2 ? 'generic' : null);
 
   let prediction = null;
   if (anchor) {

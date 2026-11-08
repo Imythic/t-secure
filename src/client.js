@@ -3,6 +3,7 @@ import { calculateAssessment, validateOpportunities, CONSENT_VERSION } from '../
 import { getHistory, historySets } from '../shared/fixtures.js';
 import { pendingConsentFor } from '../shared/consent.js';
 import { extractIndicators, indicatorsToStore } from '../shared/network.js';
+import { parseCommunication } from '../shared/schema.js';
 import { analyzeConversation, maxLevel, turnsFromText } from '../shared/prediction.js';
 
 const firebaseConfig={
@@ -35,7 +36,7 @@ export class Client {
   persist() {
     if (!this.state.demo) return;
     const {consent,contact,assessment,incidents}=this.state;
-    try{localStorage.setItem(DEMO_KEY,JSON.stringify({consent,contact,assessment,incidents}));}catch{/* Demo remains usable without browser storage. */}
+    try{localStorage.setItem(DEMO_KEY,JSON.stringify({consent,contact,assessment,incidents}));return true;}catch{/* Demo remains usable without browser storage. */return false;}
   }
   enterDemo() {
     this.generation++;this.assessmentRequest++;this.clearSubscriptions();this.state=empty();
@@ -200,6 +201,7 @@ export class Client {
   async analyze(input,signal) {
     if(!this.state.demo)return this.api('/api/analyze',input,'POST',signal);
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    parseCommunication(input); // Same validation as the server, so demo and connected modes reject the same input.
     const result={...analyzeText(input.text),sessionId:input.sessionId||crypto.randomUUID(),sequence:input.sequence,local:true};
     result.risk=maxLevel(result.risk,analyzeConversation(turnsFromText(input.text)).level);
     const previous=this.state.incidents.find((i)=>i.id===result.sessionId);
@@ -208,7 +210,7 @@ export class Client {
     const indicators=indicatorsToStore(extractIndicators({text:input.text,sender:input.sender}),incident.risk);
     if(indicators)incident.indicators=indicators;
     this.state.incidents=[incident,...this.state.incidents.filter((i)=>i.id!==incident.id)].slice(0,50);
-    this.persist();return result;
+    result.saved=this.persist();return result;
   }
   async saveContact(contact) {
     if(!contact.name.trim() || contact.name.length>80 || contact.relationship.length>60 || !/^[+0-9() .-]{7,30}$/.test(contact.phone))throw new Error('Enter a contact name and a valid phone number.');
