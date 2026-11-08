@@ -52,12 +52,20 @@ export function calls(state,ui) {
   <div class="call-preparation"><p><strong>Before you begin:</strong> a familiar voice does not verify a caller. Keep a trusted number ready.</p><div class="call-audio-control"><label for="call-alert-audio">Call alert audio</label><select id="call-alert-audio"><option value="visual" ${ui.callAudio==='visual'?'selected':''}>Visual alerts only</option><option value="tone" ${ui.callAudio==='tone'?'selected':''}>Visual + gentle tone</option><option value="speech" ${ui.callAudio==='speech'?'selected':''}>Visual + spoken guidance</option></select></div><p class="field-help">One alert per risk level, per call. Audio is optional and plays on this device. <span id="call-audio-status" role="status">${ui.audioUnavailable?'Audio is unavailable. Visual alerts remain active.':''}</span></p></div>
   <div id="call-announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div><div id="call-workspace">${callWorkspace(state,ui)}</div>`;
 }
+const lowerFirst=(text='')=>text.charAt(0).toLowerCase()+text.slice(1);
+function effectiveRisk(snapshot) {
+  const level=snapshot.insight?.level||'low',risk=snapshot.analysis?.risk||'low';
+  const rank={low:0,unknown:0,caution:1,high:2};
+  return rank[level]>rank[risk]?level:risk;
+}
 export function callWarningDialog(snapshot,state) {
-  const reasons=snapshot.analysis.reasons.slice(-2);
+  const prediction=snapshot.insight?.prediction;
+  const reasons=snapshot.analysis.reasons.length?snapshot.analysis.reasons.slice(-2).map(reason=>({label:CATEGORIES[reason.code]?.label||'Warning sign',evidence:reason.evidence})):(snapshot.insight?.findings||[]).slice(-3).map(f=>({label:f.label,evidence:f.excerpt}));
   return `<div class="call-warning-heading"><h2 id="call-warning-title">Pause and verify this caller.</h2><button class="dialog-close" data-action="keep-call-paused" aria-label="Keep call paused" autofocus>${icon('close')}</button></div>
-    <div class="call-warning-body" role="region" aria-label="Warning details" tabindex="0"><p id="call-warning-copy">This request has serious warning signs. The practice call is paused.</p>
-    <ul class="call-warning-evidence">${reasons.map(reason=>`<li><strong>${h(CATEGORIES[reason.code]?.label||'Warning sign')}</strong><blockquote>“${h(reason.evidence.slice(0,180))}${reason.evidence.length>180?'…':''}”</blockquote></li>`).join('')}</ul>
-    <p>Hold off on sharing codes or sending money. Call back using a number you already trust.</p>
+    <div class="call-warning-body" role="region" aria-label="Warning details" tabindex="0"><p id="call-warning-copy">${snapshot.alert?.predictive?'This conversation is following a known scam pattern. The practice call is paused before the next step.':'This request has serious warning signs. The practice call is paused.'}</p>
+    ${prediction?`<div class="dialog-prediction"><span>${icon('spark')}What may come next · ${h(prediction.strengthLabel)}</span><strong>The caller may ${h(lowerFirst(prediction.action))}.</strong></div>`:''}
+    <ul class="call-warning-evidence">${reasons.map(reason=>`<li><strong>${h(reason.label)}</strong><blockquote>“${h(reason.evidence.slice(0,180))}${reason.evidence.length>180?'…':''}”</blockquote></li>`).join('')}</ul>
+    <p>${prediction?h(prediction.advice):'Hold off on sharing codes or sending money. Call back using a number you already trust.'}</p>
     <p class="privacy-footnote">A warning sign is a reason to verify. It does not prove who is calling.</p></div>
     <div class="call-warning-actions"><button class="button danger" data-action="end-call">${icon('phone')}End demo call</button>${contactAction(state.contact)}<button class="button secondary" data-action="continue-call">Continue demo</button></div>`;
 }
@@ -68,12 +76,43 @@ export function callWorkspace(state,ui) {
   const analysis=snapshot.analysis;
   const labels={idle:'Ready when you are',playing:'Call in progress',paused:'Paused',ended:'Call ended',completed:'Practice complete'};
   const alert=active?snapshot.alert:null;
-  return `${alert?`<section class="call-live-alert ${h(alert.risk)}" aria-label="Current call warning">${icon('alert')}<div><strong>${alert.risk==='high'?'High-risk warning':'Pause and verify'}</strong><p>${alert.risk==='high'?'Verify the caller before sharing information or sending money.':'Pressure or urgency deserves a second look.'}</p></div><button class="text-button" data-action="${alert.risk==='high'?'review-call-warning':'pause-to-verify'}">${alert.risk==='high'?'Review alert':'Pause to verify'}</button></section>`:''}
-  <div class="call-grid"><section class="conversation-panel"><div class="call-person"><span class="call-avatar">${h(scenario.initials)}</span><div><h2>${h(scenario.caller)}</h2><span class="call-state"><i class="${snapshot.status==='playing'?'pulsing':''}"></i>${labels[snapshot.status]}</span></div><span class="small-chip">${snapshot.turns.length?h(riskLabels[analysis.risk]):'Sample call'}</span></div>
-    <div class="transcript" role="log" tabindex="0" aria-label="Sample conversation transcript" aria-live="off">${snapshot.turns.length?`<ol>${snapshot.turns.map((t)=>`<li class="turn ${t.speaker}"><span>${t.speaker==='contact'?'Caller':'You · sample response'}</span><p>${highlight(t.text,analysis.reasons)}</p></li>`).join('')}</ol>`:`<div class="transcript-empty">${icon('headphones')}<h3>Take a moment to practice.</h3><p>${h(scenario.description)}</p><p class="quiet-note">Read along as a sample conversation appears. Nothing is recorded or connected to your phone.</p></div>`}</div>
+  const prediction=snapshot.insight?.prediction;
+  const risk=effectiveRisk(snapshot);
+  const marks=[...analysis.reasons,...(snapshot.insight?.findings||[]).map(f=>({evidence:f.excerpt}))];
+  return `${alert?`<section class="call-live-alert ${h(alert.risk)}" aria-label="Current call warning">${icon('alert')}<div><strong>${alert.risk==='high'?'High-risk warning':'Pause and verify'}</strong><p>${alert.predictive&&prediction?'The caller may '+h(lowerFirst(prediction.action))+'. Verify before you act.':alert.risk==='high'?'Verify the caller before sharing information or sending money.':'Pressure or urgency deserves a second look.'}</p></div><button class="text-button" data-action="${alert.risk==='high'?'review-call-warning':'pause-to-verify'}">${alert.risk==='high'?'Review alert':'Pause to verify'}</button></section>`:''}
+  <div class="call-grid"><section class="conversation-panel"><div class="call-person"><span class="call-avatar">${h(scenario.initials)}</span><div><h2>${h(scenario.caller)}</h2><span class="call-state"><i class="${snapshot.status==='playing'?'pulsing':''}"></i>${labels[snapshot.status]}</span></div><span class="small-chip">${snapshot.turns.length?h(riskLabels[risk]):'Sample call'}</span></div>
+    <div class="transcript" role="log" tabindex="0" aria-label="Sample conversation transcript" aria-live="off">${snapshot.turns.length?`<ol>${snapshot.turns.map((t)=>`<li class="turn ${t.speaker}"><span>${t.speaker==='contact'?'Caller':'You · sample response'}</span><p>${highlight(t.text,marks)}</p></li>`).join('')}</ol>`:`<div class="transcript-empty">${icon('headphones')}<h3>Take a moment to practice.</h3><p>${h(scenario.description)}</p><p class="quiet-note">Read along as a sample conversation appears. Nothing is recorded or connected to your phone.</p></div>`}</div>
     <div class="call-controls">${active?`<button class="button secondary" data-action="${snapshot.status==='paused'?'resume':'pause'}">${icon(snapshot.status==='paused'?'play':'pause')}${snapshot.status==='paused'?'Resume call':'Pause call'}</button><button class="button danger" data-action="end-call">${icon('phone')}End demo call</button>`:`<button class="button primary" data-action="start-call">${icon('play')}${snapshot.status==='idle'?'Start practice call':'Practice again'}</button><span class="quiet-note">${snapshot.status==='idle'?'You can pause or end at any time.':'You stayed in control. That’s the habit.'}</span>`}</div></section>
-    <aside class="call-guidance" tabindex="-1">${analysisPanel(analysis,state,true)}<div class="simple-note">${icon('lock')}<p>Voices and caller names can be imitated. Use a saved number to verify independently.</p></div></aside></div>
+    <aside class="call-guidance" tabindex="-1">${snapshot.turns.length?predictionCard(snapshot):''}${analysisPanel({...analysis,risk},state,true)}<div class="simple-note">${icon('lock')}<p>Voices and caller names can be imitated. Use a saved number to verify independently.</p></div></aside></div>
+    ${snapshot.turns.length?manipulationTimeline(snapshot):''}
     ${!active&&snapshot.turns.length?`<section class="call-followup"><h2>After the call, take your next step.</h2><p>${analysis.risk==='high'?'If you shared information or sent money, follow the recovery steps promptly.':'Keep practicing an independent callback before acting on unexpected requests.'}</p><div class="button-row"><a class="button primary" href="#/recovery${snapshot.sessionId?'/'+h(snapshot.sessionId):''}">Get recovery guidance ${icon('arrow')}</a><a class="text-link" href="#/learn">Build a safer habit ${icon('book')}</a></div></section>`:''}`;
+}
+export function predictionCard(snapshot) {
+  const prediction=snapshot.insight?.prediction;
+  if(!prediction)return `<section class="prediction-card quiet" aria-label="Predicted next step"><span class="prediction-eyebrow">${icon('spark')}What may come next</span><p>Watching how the conversation develops. No scam pattern so far.</p></section>`;
+  const {strength,strengthLabel,confirmed}=prediction;
+  const filled={possible:1,likely:2,strong:3}[strength];
+  return `<section class="prediction-card ${h(strength)}" aria-label="Predicted next step"><div class="prediction-top"><span class="prediction-eyebrow">${icon('spark')}What may come next</span><span class="likelihood">${h(strengthLabel)}</span></div>
+    <div class="likelihood-meter" aria-hidden="true">${[1,2,3].map(n=>`<i class="${n<=filled?'on':''}"></i>`).join('')}</div>
+    ${confirmed?`<p class="prediction-confirmed">${icon('check')}${snapshot.predictedAt&&snapshot.predictedAt.turn<confirmed.turn?`Predicted at turn ${snapshot.predictedAt.turn}, before the request at turn ${confirmed.turn}`:`Request detected at turn ${confirmed.turn}`}</p><h3>They asked you to ${h(lowerFirst(confirmed.label))}. Next, they may ${h(lowerFirst(prediction.followUp))}.</h3>`:`<h3>The caller may ${h(lowerFirst(prediction.action))}.</h3>`}
+    <p class="prediction-pattern">${h(prediction.name)}</p>
+    <h4>Why we think so</h4><ul class="prediction-evidence">${prediction.evidence.map(f=>`<li><strong>${h(f.label)}</strong><span>“${h(f.excerpt)}”</span></li>`).join('')}</ul>
+    <div class="prediction-advice">${icon('shield')}<p><strong>Safer step:</strong> ${h(prediction.advice)}</p></div>
+    <p class="prediction-uncertainty">${icon('info')}${h(prediction.uncertainty)}</p></section>`;
+}
+export function manipulationTimeline(snapshot) {
+  const {findings=[],requests=[]}=snapshot.insight||{};
+  const turns=[...new Set([...findings.map(f=>f.turn),...requests.map(r=>r.turn),snapshot.predictedAt?.turn].filter(Boolean))].sort((a,b)=>a-b);
+  if(!turns.length)return '';
+  return `<section class="manipulation-timeline" aria-labelledby="timeline-title"><div class="timeline-heading"><h2 id="timeline-title">How the conversation developed</h2><p>Each tactic we noticed, in order. Based only on the words used, never a judgment of who is calling.</p></div>
+    <ol class="timeline">${turns.map(turn=>{
+      const here=findings.filter(f=>f.turn===turn),asked=requests.filter(r=>r.turn===turn);
+      const time=here[0]?.time;
+      return `<li class="timeline-step ${asked.length?'request':''}"><span class="timeline-marker"></span><div class="timeline-meta">Turn ${turn}${time?` · ${h(time)}`:''}</div>
+        ${here.map(f=>`<div class="timeline-finding"><div class="timeline-finding-head"><strong>${h(f.label)}</strong><span class="confidence ${h(f.confidence)}">${h(f.confidence)} confidence</span></div><blockquote>“${h(f.excerpt)}”</blockquote><p>${h(f.explanation)}</p></div>`).join('')}
+        ${asked.map(r=>`<div class="timeline-request">${icon('alert')}<p><strong>Request: ${h(r.label)}</strong> “${h(r.excerpt)}”</p></div>`).join('')}
+        ${snapshot.predictedAt?.turn===turn?`<div class="timeline-predicted">${icon('spark')}<p><strong>Prediction made:</strong> the caller may ${h(lowerFirst(snapshot.predictedAt.action))}.</p></div>`:''}</li>`;
+    }).join('')}</ol></section>`;
 }
 export function analysisPanel(analysis,state,call=false) {
   const risk=analysis?.risk||'low';

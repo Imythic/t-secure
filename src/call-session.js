@@ -1,4 +1,5 @@
 import { analyzeText, mergeAnalysis } from '../shared/detection.js';
+import { analyzeConversation } from '../shared/prediction.js';
 export class CallSession {
   constructor({analyze,onChange,intervalMs=4500,minAnalysisMs=3000}) {
     Object.assign(this,{analyze,onChange,intervalMs,minAnalysisMs});
@@ -7,7 +8,7 @@ export class CallSession {
   emit() { this.onChange({...this.snapshot,turns:[...this.snapshot.turns]}); }
   start(scenario) {
     this.end(false); this.generation++; this.scenario=scenario; this.index=0;
-    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},sequence:0,sessionId:null,alert:null};
+    this.snapshot={status:'playing',scenarioId:scenario.id,turns:[],analysis:{risk:'low',reasons:[]},insight:analyzeConversation([]),predictedAt:null,sequence:0,sessionId:null,alert:null};
     this.announcedRisk=0;
     this.lastRequest=0; this.retryAt=0;this.busy=false; this.advance(); this.schedule();
   }
@@ -22,21 +23,34 @@ export class CallSession {
     this.snapshot.sequence++;
     const context=this.snapshot.turns.map((turn)=>turn.speaker + ': ' + turn.text).join('\n');
     this.snapshot.analysis={...mergeAnalysis(this.snapshot.analysis,analyzeText(context)),incomplete:this.snapshot.analysis.incomplete};
+    this.updateInsight();
     this.checkAlert();
     this.emit(); this.request();
+  }
+  updateInsight() {
+    const insight=analyzeConversation(this.snapshot.turns);
+    // Remember when a likely next step was first predicted, so the timeline can
+    // show how early the warning came compared with the actual request.
+    if(insight.prediction&&insight.prediction.strength!=='possible'&&!this.snapshot.predictedAt)this.snapshot.predictedAt={turn:this.snapshot.turns.length,action:insight.prediction.predictedAction};
+    this.snapshot.insight=insight;
   }
   checkAlert() {
     if(!['playing','paused'].includes(this.snapshot.status))return;
     const {risk,reasons}=this.snapshot.analysis;
-    const level={caution:1,high:2}[risk]||0;
+    const insight=this.snapshot.insight;
     const context=this.snapshot.turns.map(turn=>turn.speaker+': '+turn.text).join('\n');
     const grounded=reasons.some(reason=>typeof reason.evidence==='string'&&reason.evidence.length>=3&&context.includes(reason.evidence));
-    if(level<=this.announcedRisk||!grounded)return;
+    const ruleLevel=grounded?({caution:1,high:2}[risk]||0):0;
+    // Prediction findings are exact transcript excerpts, so they are grounded by construction.
+    const insightLevel=insight&&(insight.findings.length||insight.requests.length)?({caution:1,high:2}[insight.level]||0):0;
+    const level=Math.max(ruleLevel,insightLevel);
+    if(level<=this.announcedRisk)return;
     this.announcedRisk=level;
-    this.snapshot.alert={id:this.generation+':'+level,risk};
+    const alertRisk=level===2?'high':'caution';
+    this.snapshot.alert={id:this.generation+':'+level,risk:alertRisk,predictive:ruleLevel<level};
     // A single deliberate interruption for high risk; reviewing it never resets
     // the warning or enables repeated interruptions from the same call.
-    if(risk==='high'){
+    if(alertRisk==='high'){
       this.snapshot.status='paused';
       clearTimeout(this.timer);
     }
