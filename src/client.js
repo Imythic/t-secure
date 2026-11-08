@@ -2,6 +2,8 @@ import { analyzeText } from '../shared/detection.js';
 import { calculateAssessment, validateOpportunities, CONSENT_VERSION } from '../shared/scoring.js';
 import { getHistory, historySets } from '../shared/fixtures.js';
 import { pendingConsentFor } from '../shared/consent.js';
+import { extractIndicators, indicatorsToStore } from '../shared/network.js';
+import { analyzeConversation, maxLevel, turnsFromText } from '../shared/prediction.js';
 
 const firebaseConfig={
   apiKey:import.meta.env.VITE_FIREBASE_API_KEY,
@@ -199,9 +201,12 @@ export class Client {
     if(!this.state.demo)return this.api('/api/analyze',input,'POST',signal);
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const result={...analyzeText(input.text),sessionId:input.sessionId||crypto.randomUUID(),sequence:input.sequence,local:true};
+    result.risk=maxLevel(result.risk,analyzeConversation(turnsFromText(input.text)).level);
     const previous=this.state.incidents.find((i)=>i.id===result.sessionId);
     const incident={id:result.sessionId,channel:input.channel,source:input.source||'user',risk:result.risk,reasonCodes:[...new Set(result.reasons.map((r)=>r.code))],updatedAt:new Date().toISOString(),recovery:previous?.recovery||[]};
     if(previous?.risk==='high')incident.risk='high';
+    const indicators=indicatorsToStore(extractIndicators({text:input.text,sender:input.sender}),incident.risk);
+    if(indicators)incident.indicators=indicators;
     this.state.incidents=[incident,...this.state.incidents.filter((i)=>i.id!==incident.id)].slice(0,50);
     this.persist();return result;
   }

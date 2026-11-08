@@ -4,6 +4,8 @@ import { parseCommunication, validateModelAnalysis } from '../shared/schema.js';
 import { analyzeText, mergeAnalysis } from '../shared/detection.js';
 import { calculateAssessment, validateOpportunities, CONSENT_VERSION } from '../shared/scoring.js';
 import { getHistory, historySets } from '../shared/fixtures.js';
+import { extractIndicators, indicatorsToStore } from '../shared/network.js';
+import { analyzeConversation, combineRisk, maxLevel, turnsFromText } from '../shared/prediction.js';
 import { modelName as configuredModel } from './model-config.js';
 
 export function createService({store, model, modelName = configuredModel}) {
@@ -19,14 +21,20 @@ export function createService({store, model, modelName = configuredModel}) {
       }
       const sessionId = input.sessionId || randomUUID();
       let result = analyzeText(input.text);
+      const deterministic = maxLevel(result.risk, analyzeConversation(turnsFromText(input.text)).level);
+      result.risk = deterministic;
       let incomplete = false;
       try {
         const ai = validateModelAnalysis(await model('communication', {text:input.text,channel:input.channel}), input.text);
         result = mergeAnalysis(result, {...ai, analysisSource:'hybrid'});
+        result.risk = combineRisk(deterministic, ai.risk);
       } catch { incomplete = true; if (result.risk === 'low') result.risk = 'unknown'; }
       if (previous?.risk) result = mergeAnalysis(result, {risk:previous.risk,reasons:[]});
       // Persist only codes and derived state, never raw text, excerpts, or model prose.
+      // Network indicators are derived (domains, sender, codes, hashed wording) and kept only for warnings.
+      const indicators = indicatorsToStore(extractIndicators({text:input.text,sender:input.sender}), result.risk);
       await store.saveIncident(uid, sessionId, {
+        ...(indicators ? {indicators} : {}),
         channel:input.channel, source:input.source, sequence:input.sequence, risk:result.risk,
         reasonCodes:[...new Set(result.reasons.map((r) => r.code))],
         createdAt:previous?.createdAt || new Date().toISOString(), updatedAt:new Date().toISOString(),
